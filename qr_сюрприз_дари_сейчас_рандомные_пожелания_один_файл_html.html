@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Дари Сейчас — Тёплое пожелание</title>
+  <meta name="description" content="Откройте тёплое пожелание дня от бренда \u00abДари Сейчас\u00bb. Новое сообщение при каждом открытии и без повторов, пока не увидите все!" />
+  <style>
+    :root {
+      --bg: #fff9f2;
+      --card: #ffffff;
+      --ink: #222222;
+      --sub: #666666;
+      --brand: #ff6a3d;  /* акцент */
+      --accent: #06b6d4; /* второй акцент */
+      --radius: 20px;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 20% 0%, #fff3e6 0%, var(--bg) 60%),
+                  radial-gradient(900px 600px at 100% 100%, #eefbff 0%, var(--bg) 40%);
+      color: var(--ink);
+      display: grid; place-items: center;
+    }
+    .wrap { width: min(720px, 92vw); padding: 24px; }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 30px rgba(0,0,0,.08);
+      overflow: hidden;
+      position: relative;
+    }
+    .brand {
+      display:flex; align-items:center; gap:10px; padding: 18px 20px; border-bottom: 1px dashed #eee; background: #fff;
+    }
+    .logo {
+      width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg,var(--brand),#ffb703); display:grid;place-items:center; color:white; font-weight: 800;
+    }
+    .brand .title { font-weight: 700; }
+    .brand .subtitle { color: var(--sub); font-size: 14px; }
+    .content { padding: 28px 22px 8px 22px; text-align: center; }
+    .aff {
+      font-size: clamp(22px, 3.2vw, 30px);
+      line-height: 1.25; font-weight: 750; letter-spacing: 0.2px;
+    }
+    .hint { color: var(--sub); margin-top: 14px; font-size: 14px; }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; padding: 20px; }
+    button {
+      border: none; border-radius: 999px; padding: 12px 18px; cursor: pointer; font-weight: 700; letter-spacing: .2px;
+      background: var(--ink); color: #fff; transition: transform .05s ease, box-shadow .2s ease;
+    }
+    button.secondary { background: #f1f5f9; color: #0f172a; }
+    button:active { transform: translateY(1px); }
+    .footer { text-align:center; color: var(--sub); font-size: 12px; padding: 0 18px 20px; }
+
+    /* простая анимация конфетти-эмодзи */
+    .confetti { position: absolute; inset: 0; pointer-events:none; overflow:hidden; }
+    .piece { position:absolute; font-size: 22px; opacity: 0; animation: boom 1200ms ease-out forwards; }
+    @keyframes boom { from { transform: translate(0,0) rotate(0deg); opacity: 1; } to { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; } }
+
+    /* режим компакт для маленьких экранов QR */
+    @media (max-width: 380px) { .brand .subtitle{ display:none; } .actions{ gap:8px; } button{ padding:11px 14px; font-size:14px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="card">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">DS</div>
+        <div>
+          <div class="title">Дари Сейчас</div>
+          <div class="subtitle">Открой тёплое пожелание дня</div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="aff" id="aff">…</div>
+        <div class="hint" id="hint">Каждое открытие — новое послание. Без повторов, пока не увидите всё.</div>
+      </div>
+      <div class="actions">
+        <button id="moreBtn">Ещё пожелание</button>
+        <button id="copyBtn" class="secondary">Скопировать</button>
+        <button id="shareBtn" class="secondary">Поделиться</button>
+      </div>
+      <div class="footer">С любовью и чаем — ваш бренд «Дари Сейчас»</div>
+      <div class="confetti" id="confetti" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * НАСТРОЙКИ
+     * Можно указать набор через параметр URL ?set=newyear|birthday|kids|tea|default
+     * Пример: https://example.com/affirmations.html?set=newyear
+     */
+    const SETS = {
+      default: [
+        "Ты — самый добрый повод улыбнуться сегодня.",
+        "Пусть этот чай согреет мечту и приблизит её на шаг.",
+        "Всё получится. Маленькие шаги творят большие чудеса.",
+        "Ты делаешь этот мир вкуснее и теплее.",
+        "Сегодня — отличный день начать с улыбки.",
+        "Бери с полки радость — она твоя!",
+        "Вдох — спокойствие, выдох — благодарность.",
+        "Чашка чая и добрые мысли — идеальная суперсила.",
+        "Ты — подарок для тех, кто рядом.",
+        "Сладкие моменты дня уже в пути к тебе." \
+      ],
+      newyear: [
+        "Новый год — новая глава, наполни её радостью.",
+        "Пусть желания сбудутся быстрее, чем тает снежинка на ладони.",
+        "Символ года приносит удачу тем, кто улыбается первым.",
+        "В каждый день — по маленькому чуду!" 
+      ],
+      birthday: [
+        "Сегодня твой день — лови счастье пригоршнями!",
+        "Пусть свечи исполнят всё задуманное.",
+        "Ты — главный герой своего праздника.",
+        "Сделай желание — вселенная уже слушает." 
+      ],
+      kids: [
+        "Ты супер! И точка.",
+        "Сегодняшняя улыбка — твоя суперсила.",
+        "Делись конфеткой, и счастья станет больше!",
+        "Играй, мечтай, сияй!" 
+      ],
+      tea: [
+        "Глоток тепла — и день становится мягче.",
+        "Пей чай, а не переживания.",
+        "С каждой чашкой — больше спокойствия и уюта.",
+        "Тёплые мысли завариваются первыми." 
+      ]
+    };
+
+    const params = new URLSearchParams(location.search);
+    const setKey = (params.get('set') || 'default').toLowerCase();
+    const MESSAGES = (SETS[setKey] || SETS.default).slice();
+
+    // Версия пула (менять при обновлении списков, чтобы сбрасывался localStorage)
+    const POOL_VERSION = `v1-${setKey}`;
+
+    // Элементы
+    const affEl = document.getElementById('aff');
+    const moreBtn = document.getElementById('moreBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const confettiEl = document.getElementById('confetti');
+
+    // Инициализация пула без повторов: тасуем список и показываем по очереди, пока не кончится.
+    function loadPool() {
+      const saved = JSON.parse(localStorage.getItem('affirmationPool') || 'null');
+      if (saved && saved.version === POOL_VERSION && Array.isArray(saved.items) && typeof saved.index === 'number') {
+        return saved;
+      }
+      const items = shuffle(MESSAGES);
+      const pool = { version: POOL_VERSION, items, index: 0 };
+      localStorage.setItem('affirmationPool', JSON.stringify(pool));
+      return pool;
+    }
+
+    function savePool(pool){ localStorage.setItem('affirmationPool', JSON.stringify(pool)); }
+
+    function shuffle(arr){
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    let pool = loadPool();
+
+    function nextMessage() {
+      // если дошли до конца — тасуем заново без повторов
+      if (pool.index >= pool.items.length) {
+        pool.items = shuffle(MESSAGES.slice());
+        pool.index = 0;
+      }
+      const msg = pool.items[pool.index++];
+      savePool(pool);
+      renderMessage(msg);
+    }
+
+    function renderMessage(text){
+      affEl.textContent = text;
+      burst();
+    }
+
+    function burst(){
+      // простое конфетти на эмодзи без библиотек
+      const icons = ['✨','🎉','💫','🍬','🌟','🎈'];
+      for(let i=0;i<16;i++){
+        const span = document.createElement('span');
+        span.className = 'piece';
+        span.textContent = icons[Math.floor(Math.random()*icons.length)];
+        span.style.left = (50 + (Math.random()*20-10)) + '%';
+        span.style.top = '40%';
+        span.style.setProperty('--tx', (Math.random()*200-100) + 'px');
+        span.style.setProperty('--ty', (200 + Math.random()*200) + 'px');
+        span.style.setProperty('--rot', (Math.random()*720-360) + 'deg');
+        confettiEl.appendChild(span);
+        setTimeout(()=> span.remove(), 1300);
+      }
+    }
+
+    // Кнопки
+    moreBtn.addEventListener('click', nextMessage);
+    copyBtn.addEventListener('click', async ()=>{
+      try { await navigator.clipboard.writeText(affEl.textContent.trim());
+        flash(copyBtn, 'Скопировано!'); } catch(e){ flash(copyBtn, 'Не удалось скопировать'); }
+    });
+    shareBtn.addEventListener('click', async ()=>{
+      const text = affEl.textContent.trim() + ' — с любовью от «Дари Сейчас»';
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Пожелание дня', text }); } catch(e){}
+      } else { try { await navigator.clipboard.writeText(text); } catch(e){} flash(shareBtn, 'Скопировано для отправки'); }
+    });
+
+    function flash(btn, label){
+      const prev = btn.textContent; btn.textContent = label; btn.disabled = true;
+      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 1100);
+    }
+
+    // Показ при загрузке
+    nextMessage();
+
+    // Если нужно: смена темы через ?theme=dark
+    (function themeFromURL(){
+      const t = (params.get('theme')||'').toLowerCase();
+      if (t === 'dark') {
+        document.documentElement.style.setProperty('--bg', '#0b1220');
+        document.documentElement.style.setProperty('--card', '#0f172a');
+        document.documentElement.style.setProperty('--ink', '#e5e7eb');
+        document.documentElement.style.setProperty('--sub', '#94a3b8');
+      }
+    })();
+  </script>
+</body>
+</html>
