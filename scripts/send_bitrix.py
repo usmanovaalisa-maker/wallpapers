@@ -5,7 +5,8 @@
 
 Переменные окружения:
   BITRIX_WEBHOOK_URL  входящий вебхук, например https://company.bitrix24.ru/rest/1/abc123/
-  BITRIX_DIALOG_ID    куда писать: chat123 (групповой чат) или ID пользователя.
+  BITRIX_DIALOG_ID    куда писать: chat123 (групповой чат) или ID пользователя (личное сообщение,
+                      например для проверки — свой ID).
                       Если не задан — пост в Живую ленту для всех сотрудников.
   WISH_TZ             часовой пояс компании (по умолчанию Europe/Samara, GMT+4)
   WISH_DATE           дата ГГГГ-ММ-ДД вместо сегодняшней (для проверки)
@@ -16,6 +17,7 @@ import json
 import os
 import pathlib
 import sys
+import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
 
@@ -30,15 +32,19 @@ def todays_text(date):
     return daily or data.get("calendar", {}).get(date)
 
 
-def call(webhook, method, payload):
+def call(webhook, method, payload, fail=True):
     req = urllib.request.Request(
         webhook.rstrip("/") + f"/{method}.json",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-    if "error" in body:
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = json.loads(e.read().decode("utf-8") or "{}")
+        body.setdefault("error", f"HTTP {e.code}")
+    if "error" in body and fail:
         sys.exit(f"Битрикс24 вернул ошибку: {body.get('error')}: {body.get('error_description')}")
     return body
 
@@ -62,7 +68,13 @@ def main():
 
     dialog = os.environ.get("BITRIX_DIALOG_ID", "").strip()
     if dialog:
-        call(webhook, "im.message.add", {"DIALOG_ID": dialog, "MESSAGE": f"[B]{title}[/B]\n\n{text}"})
+        message = f"[B]{title}[/B]\n\n{text}"
+        body = call(webhook, "im.message.add", {"DIALOG_ID": dialog, "MESSAGE": message}, fail=dialog.startswith("chat"))
+        if "error" in body:
+            # личное сообщение самому себе (вебхук создан этим же пользователем) Битрикс может не принять —
+            # тогда присылаем системное уведомление
+            print(f"Личное сообщение не отправилось ({body['error']}), отправляю уведомлением.")
+            call(webhook, "im.notify.system.add", {"USER_ID": int(dialog), "MESSAGE": message})
     else:
         call(webhook, "log.blogpost.add", {"POST_TITLE": title, "POST_MESSAGE": text, "DEST": ["UA"]})
     print("Отправлено.")
