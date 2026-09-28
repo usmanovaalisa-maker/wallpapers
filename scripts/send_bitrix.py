@@ -11,7 +11,10 @@
   WISH_TZ             часовой пояс компании (по умолчанию Europe/Samara, GMT+4)
   WISH_DATE           дата ГГГГ-ММ-ДД вместо сегодняшней (для проверки)
   DRY_RUN=1           только показать текст, не отправлять
+  CARD=1              нарисовать картинку cards/ДАТА.jpg и выйти (шаг до отправки)
+  CARD_URL            публичная ссылка на картинку — прикладывается к сообщению в чат
 """
+import base64
 import datetime as dt
 import json
 import os
@@ -23,6 +26,7 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def todays_text(date):
@@ -60,12 +64,29 @@ def call(webhook, method, payload, fail=True):
     return body
 
 
-def main():
+def todays_date():
     tz = ZoneInfo(os.environ.get("WISH_TZ") or "Europe/Samara")
-    date = os.environ.get("WISH_DATE") or dt.datetime.now(tz).date().isoformat()
+    return os.environ.get("WISH_DATE") or dt.datetime.now(tz).date().isoformat()
+
+
+def image_attach(url):
+    return [{"IMAGE": [{"NAME": "Напутствие дня", "LINK": url, "PREVIEW": url, "WIDTH": 1080, "HEIGHT": 1080}]}]
+
+
+def main():
+    date = todays_date()
     text = todays_text(date)
     if not text:
         print(f"{date}: на сегодня напутствия нет — ничего не отправляем.")
+        return
+
+    if os.environ.get("CARD") == "1":
+        from make_card import make_card
+        card = make_card(date, text)
+        print(f"Картинка: {card}")
+        if os.environ.get("GITHUB_OUTPUT"):
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write(f"card=cards/{card.name}\n")
         return
 
     title = "☕ Напутствие дня от «Дари Сейчас»"
@@ -77,17 +98,30 @@ def main():
         print("::warning::Не задан секрет BITRIX_WEBHOOK_URL — сообщение не отправлено.")
         return
 
+    card_url = os.environ.get("CARD_URL", "").strip()
+    card_file = ROOT / "cards" / f"{date}.jpg"
     dialog = os.environ.get("BITRIX_DIALOG_ID", "").strip()
     if dialog:
-        message = f"[B]{title}[/B]\n\n{text}"
-        body = call(webhook, "im.message.add", {"DIALOG_ID": dialog, "MESSAGE": message}, fail=dialog.startswith("chat"))
+        payload = {"MESSAGE": f"[B]{title}[/B]\n\n{text}"}
+        if card_url:
+            payload["ATTACH"] = image_attach(card_url)
+        body = call(webhook, "im.message.add", {"DIALOG_ID": dialog, **payload}, fail=dialog.startswith("chat"))
         if "error" in body:
             # личное сообщение самому себе (вебхук создан этим же пользователем) Битрикс может не принять —
             # тогда присылаем системное уведомление
             print(f"Личное сообщение не отправилось ({body['error']}), отправляю уведомлением.")
-            call(webhook, "im.notify.system.add", {"USER_ID": int(dialog), "MESSAGE": message})
+            call(webhook, "im.notify.system.add", {"USER_ID": int(dialog), **payload})
     else:
-        call(webhook, "log.blogpost.add", {"POST_TITLE": title, "POST_MESSAGE": text, "DEST": ["UA"]})
+        post = {"POST_TITLE": title, "POST_MESSAGE": text, "DEST": ["UA"]}
+        if card_file.exists():
+            post["FILES"] = [[card_file.name, base64.b64encode(card_file.read_bytes()).decode()]]
+        body = call(webhook, "log.blogpost.add", post, fail="FILES" not in post)
+        if "error" in body:
+            print(f"Пост с картинкой не принят ({body['error']}), отправляю без вложения.")
+            post.pop("FILES")
+            if card_url:
+                post["POST_MESSAGE"] += f"\n\n[URL={card_url}]Открыть картинку[/URL]"
+            call(webhook, "log.blogpost.add", post)
     print("Отправлено.")
 
 

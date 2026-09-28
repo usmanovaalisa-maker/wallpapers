@@ -10,22 +10,57 @@ on:
         description: "Дата ГГГГ-ММ-ДД (пусто — сегодня)"
         required: false
       dry_run:
-        description: "Только показать текст, не отправлять"
+        description: "Только показать текст и картинку, не отправлять"
         type: boolean
         default: false
+
+permissions:
+  contents: write # чтобы сохранить картинку дня в папку cards/ и получить на неё ссылку
+
+concurrency: bitrix-daily
 
 jobs:
   send:
     runs-on: ubuntu-latest
+    env:
+      WISH_TZ: ${{ vars.WISH_TZ }}
+      WISH_DATE: ${{ inputs.date }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python scripts/send_bitrix.py
+      - run: pip install playwright
+
+      - name: Рисуем картинку дня
+        id: card
+        run: python scripts/send_bitrix.py
+        env:
+          CARD: "1"
+
+      - name: Показываем картинку (проверка без отправки)
+        if: inputs.dry_run && steps.card.outputs.card
+        uses: actions/upload-artifact@v4
+        with:
+          name: card
+          path: ${{ steps.card.outputs.card }}
+
+      - name: Сохраняем картинку, чтобы у неё была ссылка
+        id: save
+        if: ${{ !inputs.dry_run && steps.card.outputs.card }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ steps.card.outputs.card }}"
+          git diff --cached --quiet || git commit -m "Картинка напутствия: ${{ steps.card.outputs.card }}"
+          git pull --rebase -q origin "${GITHUB_REF_NAME}"
+          git push -q origin "HEAD:${GITHUB_REF_NAME}"
+          echo "url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$(git rev-parse HEAD)/${{ steps.card.outputs.card }}" >> "$GITHUB_OUTPUT"
+
+      - name: Отправляем в Битрикс24
+        run: python scripts/send_bitrix.py
         env:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
           BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
-          WISH_TZ: ${{ vars.WISH_TZ }}
-          WISH_DATE: ${{ inputs.date }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          CARD_URL: ${{ steps.save.outputs.url }}

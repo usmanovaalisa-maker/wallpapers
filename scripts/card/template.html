@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Шаблон картинки «Напутствие дня» для Битрикс24 (1080×1080). Текст подставляет scripts/make_card.py -->
+<html lang="ru"><head><meta charset="utf-8">
+<link href="fonts.css" rel="stylesheet">
+<style>
+  :root { --purple:#876db0; --blue:#4c76bb; --yellow:#f2c926; --ink:#2b2b33; --sub:#6b6b78; }
+  * { box-sizing:border-box; margin:0; }
+  body { width:1080px; height:1080px; overflow:hidden; font-family:Nunito, sans-serif; }
+  .poster { position:relative; width:1080px; height:1080px; overflow:hidden;
+    background:
+      radial-gradient(520px 420px at 8% 6%, #efe7fb 0%, transparent 70%),
+      radial-gradient(560px 460px at 100% 100%, #e3ecfa 0%, transparent 70%),
+      radial-gradient(480px 380px at 96% 8%, #fdf3cf 0%, transparent 70%),
+      #fffaf3;
+    display:flex; flex-direction:column; align-items:center; padding:40px 72px 0; }
+  .bubble { position:absolute; border-radius:50%; background:#fff; box-shadow:0 6px 24px rgba(135,109,176,.10); }
+  .star { position:absolute; }
+  .logo { width:300px; position:relative; }
+  h1 { font-weight:900; font-size:92px; line-height:1; color:var(--purple); letter-spacing:-1px; white-space:nowrap; position:relative; }
+  .date { position:relative; margin-top:16px; font-weight:800; font-size:30px; color:var(--blue); background:#edf2fb; padding:10px 28px; border-radius:999px; }
+  .card { position:relative; margin-top:30px; width:100%; height:430px; background:#fff; border-radius:44px; padding:40px 56px;
+    box-shadow:0 24px 60px rgba(76,118,187,.16); border:3px solid #f1ecfa; display:flex; align-items:center; justify-content:center; }
+  .text { font-weight:800; font-size:58px; line-height:1.2; color:var(--ink); text-align:center; }
+  .footer { position:relative; margin-top:30px; font-weight:600; font-size:30px; color:var(--sub); }
+  .footer b { color:var(--purple); font-weight:800; }
+</style></head>
+<body><div class="poster">
+  <div class="bubble" style="width:150px;height:150px;left:-40px;top:260px"></div>
+  <div class="bubble" style="width:60px;height:60px;left:130px;top:220px"></div>
+  <div class="bubble" style="width:190px;height:190px;right:-60px;top:170px"></div>
+  <div class="bubble" style="width:70px;height:70px;right:160px;top:100px"></div>
+  <div class="bubble" style="width:120px;height:120px;left:40px;bottom:10px"></div>
+  <div class="bubble" style="width:46px;height:46px;right:120px;bottom:40px"></div>
+  <svg class="star" style="left:150px;top:80px" width="54" height="54" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#f2c926"/></svg>
+  <svg class="star" style="right:150px;top:300px" width="40" height="40" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#876db0"/></svg>
+  <svg class="star" style="left:110px;top:420px" width="34" height="34" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#4c76bb"/></svg>
+  <svg class="star" style="right:60px;bottom:90px" width="50" height="50" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#f2c926"/></svg>
+
+  <img class="logo" src="../../logo.svg" alt="">
+  <h1>Напутствие дня</h1>
+  <div class="date" id="date">вторник, 29 сентября</div>
+  <div class="card"><div class="text" id="text">Доброе утро, команда!</div></div>
+  <div class="footer">С заботой — <b>«Дари Сейчас»</b></div>
+</div>
+<script>
+  // Подставляет текст и уменьшает шрифт, пока текст не поместится в карточку
+  window.fill = (text, date) => {
+    const el = document.getElementById('text'), card = el.parentElement;
+    document.getElementById('date').textContent = date;
+    el.textContent = text;
+    let size = 58;
+    el.style.fontSize = size + 'px';
+    while (size > 30 && el.scrollHeight > card.clientHeight - 80) { size -= 2; el.style.fontSize = size + 'px'; }
+    return size;
+  };
+</script>
+</body></html>
