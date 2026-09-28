@@ -145,34 +145,19 @@
     };
 
     const params = new URLSearchParams(location.search);
-    const setKey = (params.get('set') || 'default').toLowerCase();
-    const MESSAGES = (SETS[setKey] || SETS.default).slice();
-
-    // Версия пула (менять при обновлении списков, чтобы сбрасывался localStorage)
-    const POOL_VERSION = `v1-${setKey}`;
+    const setParam = (params.get('set') || '').toLowerCase();
 
     // Элементы
     const affEl = document.getElementById('aff');
+    const hintEl = document.getElementById('hint');
     const moreBtn = document.getElementById('moreBtn');
     const copyBtn = document.getElementById('copyBtn');
     const shareBtn = document.getElementById('shareBtn');
     const confettiEl = document.getElementById('confetti');
 
-    // Инициализация пула без повторов: тасуем список и показываем по очереди, пока не кончится.
     // localStorage может быть недоступен (инкогнито, заблокированные cookies) — тогда просто не запоминаем
-    function loadPool() {
-      let saved = null;
-      try { saved = JSON.parse(localStorage.getItem('affirmationPool') || 'null'); } catch(e){}
-      if (saved && saved.version === POOL_VERSION && Array.isArray(saved.items) && typeof saved.index === 'number') {
-        return saved;
-      }
-      const items = shuffle(MESSAGES.slice());
-      const pool = { version: POOL_VERSION, items, index: 0 };
-      savePool(pool);
-      return pool;
-    }
-
-    function savePool(pool){ try { localStorage.setItem('affirmationPool', JSON.stringify(pool)); } catch(e){} }
+    function load(key){ try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ return null; } }
+    function save(key, val){ try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){} }
 
     function shuffle(arr){
       for (let i = arr.length - 1; i > 0; i--) {
@@ -182,16 +167,86 @@
       return arr;
     }
 
-    let pool = loadPool();
+    /**
+     * РЕЖИМ «АФФИРМАЦИЯ ДНЯ» (по умолчанию, без ?set=)
+     * Фразы берутся из wishes/fans.json с учётом даты: свежие фразы дня, праздник, месяц, общие.
+     * У каждого человека своя фраза на сегодня; при повторном открытии в тот же день — та же,
+     * «Ещё пожелание» даёт следующую. Уже виденные фразы не повторяются, пока не закончатся все.
+     */
+    const pad = n => String(n).padStart(2, '0');
+    const today = new Date();
+    const todayISO = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+
+    function holidayMatches(h, d){
+      if (h.rule) {
+        const {month, weekday, nth} = h.rule;
+        if (d.getMonth()+1 !== month || d.getDay() !== weekday) return false;
+        if (nth > 0) return Math.ceil(d.getDate() / 7) === nth;
+        const next = new Date(d); next.setDate(d.getDate() + 7);
+        return next.getMonth() !== d.getMonth(); // последний такой день недели в месяце
+      }
+      const md = `${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      return h.from <= h.to ? (md >= h.from && md <= h.to) : (md >= h.from || md <= h.to); // диапазон через Новый год
+    }
+
+    function buildDayPool(data){
+      const holidays = (data.holidays || []).filter(h => holidayMatches(h, today));
+      const special = [...((data.daily || {})[todayISO] || []), ...holidays.flatMap(h => h.fans)];
+      const seasonal = (data.months || {})[String(today.getMonth()+1)] || [];
+      const general = data.general || [];
+      const seen = new Set(load('affSeen') || []);
+      // сначала невиденные, внутри — сначала праздничные/свежие, потом сезонные, потом общие
+      const groups = [special, seasonal, general].map(g => shuffle([...new Set(g)]));
+      const all = [...new Set(groups.flat())];
+      const items = [...all.filter(t => !seen.has(t)), ...all.filter(t => seen.has(t))];
+      return { items, holiday: holidays.map(h => h.name).join(', ') };
+    }
+
+    function markSeen(text){
+      const seen = load('affSeen') || [];
+      if (!seen.includes(text)) { seen.push(text); save('affSeen', seen.slice(-2000)); }
+    }
+
+    let MESSAGES = [], POOL_VERSION = '', pool = null, dayMode = false;
+
+    function initSetMode(){
+      // Можно указать набор через параметр URL ?set=newyear|birthday|kids|tea|default
+      const key = SETS[setParam] ? setParam : 'default';
+      MESSAGES = SETS[key].slice();
+      // Версия пула (менять при обновлении списков, чтобы сбрасывался localStorage)
+      POOL_VERSION = `v1-${key}`;
+      const saved = load('affirmationPool');
+      pool = (saved && saved.version === POOL_VERSION && Array.isArray(saved.items) && typeof saved.index === 'number')
+        ? saved : { version: POOL_VERSION, items: shuffle(MESSAGES.slice()), index: 0 };
+      nextMessage();
+    }
+
+    function initDayMode(data){
+      dayMode = true;
+      const { items, holiday } = buildDayPool(data);
+      MESSAGES = items;
+      POOL_VERSION = `day-${todayISO}`;
+      const dateText = today.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+      hintEl.textContent = `Аффирмация дня · ${dateText}` + (holiday ? ` · ${holiday}` : '');
+      const saved = load('affirmationDay');
+      if (saved && saved.version === POOL_VERSION && Array.isArray(saved.items) && saved.index > 0) {
+        pool = saved;
+        renderMessage(pool.items[pool.index - 1]); // та же фраза дня при повторном открытии
+      } else {
+        pool = { version: POOL_VERSION, items, index: 0 };
+        nextMessage();
+      }
+    }
 
     function nextMessage() {
+      if (!pool) return; // фразы ещё загружаются
       // если дошли до конца — тасуем заново без повторов
       if (pool.index >= pool.items.length) {
         pool.items = shuffle(MESSAGES.slice());
         pool.index = 0;
       }
       const msg = pool.items[pool.index++];
-      savePool(pool);
+      if (dayMode) { save('affirmationDay', pool); markSeen(msg); } else save('affirmationPool', pool);
       renderMessage(msg);
     }
 
@@ -235,8 +290,12 @@
       setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 1100);
     }
 
-    // Показ при загрузке
-    nextMessage();
+    // Показ при загрузке: с ?set= — старые наборы, иначе аффирмация дня из wishes/fans.json
+    if (setParam) initSetMode();
+    else fetch('wishes/fans.json', { cache: 'no-cache' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(initDayMode)
+      .catch(initSetMode);
 
     // Если нужно: смена темы через ?theme=dark
     (function themeFromURL(){

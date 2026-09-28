@@ -1,0 +1,31 @@
+name: Напутствие дня в Битрикс24
+
+on:
+  schedule:
+    # 04:47 UTC = 08:47 по GMT+4; GitHub иногда запускает с опозданием на несколько минут
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Дата ГГГГ-ММ-ДД (пусто — сегодня)"
+        required: false
+      dry_run:
+        description: "Только показать текст, не отправлять"
+        type: boolean
+        default: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/send_bitrix.py
+        env:
+          BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
+          BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
+          WISH_TZ: ${{ vars.WISH_TZ }}
+          WISH_DATE: ${{ inputs.date }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
