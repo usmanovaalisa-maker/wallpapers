@@ -16,6 +16,7 @@ import datetime as dt
 import json
 import os
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -32,6 +33,12 @@ def todays_text(date):
     return daily or data.get("calendar", {}).get(date)
 
 
+def normalize_webhook(url):
+    # Оставляем только https://портал/rest/ID/КОД/ — без примера метода вроде «profile» на конце
+    m = re.match(r"(https?://[^/]+/rest/\d+/[^/]+)", url.strip())
+    return m.group(1) + "/" if m else url.strip()
+
+
 def call(webhook, method, payload, fail=True):
     req = urllib.request.Request(
         webhook.rstrip("/") + f"/{method}.json",
@@ -45,7 +52,11 @@ def call(webhook, method, payload, fail=True):
         body = json.loads(e.read().decode("utf-8") or "{}")
         body.setdefault("error", f"HTTP {e.code}")
     if "error" in body and fail:
-        sys.exit(f"Битрикс24 вернул ошибку: {body.get('error')}: {body.get('error_description')}")
+        hint = ""
+        if body["error"] in ("ERROR_METHOD_NOT_FOUND", "insufficient_scope"):
+            scope = "Живая лента (log)" if method.startswith("log.") else "Чат и уведомления (im)"
+            hint = f"\nПохоже, у вебхука нет права «{scope}»: отметьте его в настройках вебхука в Битрикс24 и сохраните."
+        sys.exit(f"Битрикс24 вернул ошибку на {method}: {body.get('error')}: {body.get('error_description')}{hint}")
     return body
 
 
@@ -59,7 +70,7 @@ def main():
 
     title = "☕ Напутствие дня от «Дари Сейчас»"
     print(f"{date}: {text}")
-    webhook = os.environ.get("BITRIX_WEBHOOK_URL", "").strip()
+    webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
     if os.environ.get("DRY_RUN") == "1":
         return
     if not webhook:
