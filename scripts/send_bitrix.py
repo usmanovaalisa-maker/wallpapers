@@ -117,10 +117,12 @@ def main():
         return
     results, stats = day_results(date, data)
     text = todays_text(date, results["level"], data)
+    # пожелание идёт и в сообщение (после цифр), и на картинку (без цифр) — только когда есть итоги
+    reaction = results_reaction(date, results["level"], data) if stats else ""
 
     if os.environ.get("CARD") == "1":
         from make_card import make_card
-        card = make_card(date, text)
+        card = make_card(date, text, reaction)
         print(f"Картинка: {card}")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
@@ -131,7 +133,6 @@ def main():
     print(f"{date}: {text}" + ("\n(+ строка с итогами дня — в лог не выводится)" if stats else ""))
     if stats:
         text = f"{text}\n\n{stats}"
-        reaction = results_reaction(date, results["level"], data)
         if reaction:
             text += f"\n\n{reaction}"
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))

@@ -20,7 +20,11 @@
   .date { position:relative; margin-top:16px; font-weight:800; font-size:30px; color:var(--blue); background:#edf2fb; padding:10px 28px; border-radius:999px; }
   .card { position:relative; margin-top:30px; width:100%; height:430px; background:#fff; border-radius:44px; padding:40px 56px;
     box-shadow:0 24px 60px rgba(76,118,187,.16); border:3px solid #f1ecfa; display:flex; align-items:center; justify-content:center; }
+  .content { display:flex; flex-direction:column; align-items:center; gap:22px; }
   .text { font-weight:800; font-size:58px; line-height:1.2; color:var(--ink); text-align:center; }
+  .wish { font-weight:700; line-height:1.3; color:var(--purple); text-align:center; }
+  .wish::before { content:""; display:block; width:120px; height:4px; margin:0 auto 22px; border-radius:2px; background:var(--yellow); }
+  .wish:empty { display:none; }
   .footer { position:relative; margin-top:30px; font-weight:600; font-size:30px; color:var(--sub); }
   .footer b { color:var(--purple); font-weight:800; }
 </style></head>
@@ -39,18 +43,21 @@
   <img class="logo" src="../../logo.svg" alt="">
   <h1>Напутствие дня</h1>
   <div class="date" id="date">вторник, 29 сентября</div>
-  <div class="card"><div class="text" id="text">Доброе утро, команда!</div></div>
+  <div class="card"><div class="content" id="content"><div class="text" id="text">Доброе утро, команда!</div><div class="wish" id="wish"></div></div></div>
   <div class="footer">С заботой — <b>«Дари Сейчас»</b></div>
 </div>
 <script>
-  // Подставляет текст и уменьшает шрифт, пока текст не поместится в карточку
-  window.fill = (text, date) => {
-    const el = document.getElementById('text'), card = el.parentElement;
+  // Подставляет текст и пожелание и уменьшает шрифт, пока всё не поместится в карточку
+  window.fill = (text, date, wish) => {
+    const el = document.getElementById('text'), w = document.getElementById('wish');
+    const content = document.getElementById('content'), card = content.parentElement;
     document.getElementById('date').textContent = date;
     el.textContent = text;
-    let size = 58;
-    el.style.fontSize = size + 'px';
-    while (size > 30 && el.scrollHeight > card.clientHeight - 80) { size -= 2; el.style.fontSize = size + 'px'; }
+    w.textContent = wish || '';
+    let size = wish ? 50 : 58;
+    const apply = () => { el.style.fontSize = size + 'px'; w.style.fontSize = Math.round(size * 0.74) + 'px'; };
+    apply();
+    while (size > 26 && content.scrollHeight > card.clientHeight - 80) { size -= 2; apply(); }
     return size;
   };
 </script>
