@@ -1,7 +1,10 @@
 """Отправляет напутствие дня сотрудникам в Битрикс24.
 
 Текст берётся из wishes/team.json: daily[дата] (свежий) или calendar[дата].
-Если на сегодня текста нет (выходной, праздник) — ничего не отправляет.
+daily[дата] может быть объектом с вариантами под итоги прошедшего дня
+({"record", "up", "steady", "support"}) — вариант выбирается по scripts/day_results.py,
+а строка с цифрами добавляется только в сообщение (не в картинку и не в лог:
+репозиторий публичный). Если на сегодня текста нет (выходной, праздник) — ничего не отправляет.
 
 Переменные окружения:
   BITRIX_WEBHOOK_URL  входящий вебхук, например https://company.bitrix24.ru/rest/1/abc123/
@@ -13,6 +16,8 @@
   DRY_RUN=1           только показать текст, не отправлять
   CARD=1              нарисовать картинку cards/ДАТА.jpg и выйти (шаг до отправки)
   CARD_URL            публичная ссылка на картинку — прикладывается к сообщению в чат
+  WB_API_TOKEN, OZON_CLIENT_ID, OZON_API_KEY, RESULTS_SHEET_CSV_URL — источники итогов дня
+                      (см. scripts/day_results.py); без них напутствие уходит без цифр
 """
 import base64
 import datetime as dt
@@ -29,12 +34,33 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 
-def todays_text(date):
-    data = json.loads((ROOT / "wishes" / "team.json").read_text(encoding="utf-8"))
+def team_data():
+    return json.loads((ROOT / "wishes" / "team.json").read_text(encoding="utf-8"))
+
+
+def todays_text(date, level="support", data=None):
+    data = data or team_data()
     daily = data.get("daily", {}).get(date)
     if isinstance(daily, list):
         daily = daily[0] if daily else None
+    if isinstance(daily, dict):
+        daily = next((daily[k] for k in (level, "support", "steady", "up") if daily.get(k)), None)
     return daily or data.get("calendar", {}).get(date)
+
+
+def day_results(date, data):
+    """Итоги прошедшего дня: считаем один раз за запуск (у WB лимит — 1 запрос в минуту)
+    и держим во временной папке раннера, вне репозитория."""
+    import day_results as dr
+    cache = pathlib.Path(os.environ.get("RUNNER_TEMP") or "/tmp") / f"day_results_{date}.json"
+    if cache.exists():
+        r = json.loads(cache.read_text(encoding="utf-8"))
+    else:
+        r = dr.collect(dt.date.fromisoformat(date), data.get("calendar", {}))
+        cache.write_text(json.dumps(r, ensure_ascii=False), encoding="utf-8")
+        print(f"Итоги {r['start']}…{r['end']}: уровень {r['level']}, источники: {', '.join(r['sources']) or 'нет'}"
+              + (f", ошибки: {'; '.join(r['errors'])}" if r["errors"] else ""))
+    return r, dr.stats_line(r)
 
 
 def normalize_webhook(url):
@@ -75,10 +101,12 @@ def image_attach(url):
 
 def main():
     date = todays_date()
-    text = todays_text(date)
-    if not text:
+    data = team_data()
+    if not todays_text(date, data=data):
         print(f"{date}: на сегодня напутствия нет — ничего не отправляем.")
         return
+    results, stats = day_results(date, data)
+    text = todays_text(date, results["level"], data)
 
     if os.environ.get("CARD") == "1":
         from make_card import make_card
@@ -90,7 +118,9 @@ def main():
         return
 
     title = "☕ Напутствие дня от «Дари Сейчас»"
-    print(f"{date}: {text}")
+    print(f"{date}: {text}" + ("\n(+ строка с итогами дня — в лог не выводится)" if stats else ""))
+    if stats:
+        text = f"{text}\n\n{stats}"
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
     if os.environ.get("DRY_RUN") == "1":
         return
