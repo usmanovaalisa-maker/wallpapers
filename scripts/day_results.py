@@ -8,7 +8,8 @@
   OZON_CLIENT_ID        Client-Id продавца Ozon
   OZON_API_KEY          API-ключ Ozon (роль с доступом к аналитике)
   RESULTS_SHEET_CSV_URL ссылка на Google-таблицу, опубликованную как CSV.
-                        Колонки: Дата | Заказы | Выручка | Победа дня (любые из трёх последних)
+                        Колонки: Дата | Заказы | Выручка | Прибыль | Победа дня (любые, кроме даты,
+                        можно не заполнять). Прибыль берётся только отсюда — например, из TrueStats
 
 Период — с прошлого рабочего дня по calendar до вчера включительно
 (в понедельник это пятница–воскресенье). Уровень:
@@ -90,14 +91,15 @@ def ozon(start, end):
 def sheet(start, end):
     url = os.environ.get("RESULTS_SHEET_CSV_URL", "").strip()
     if not url:
-        return None, {}
+        return None, {}, {}
     rows = list(csv.reader(io.StringIO(_get(url))))
     if not rows:
-        return {}, {}
+        return {}, {}, {}
     head = [h.strip().lower() for h in rows[0]]
     col = lambda *names: next((i for i, h in enumerate(head) if any(n in h for n in names)), None)
     ci, co, cv, cw = col("дата"), col("заказ"), col("выручк", "сумм"), col("побед", "комментар")
-    days, wins = {}, {}
+    cp = col("прибыл")
+    days, wins, profit = {}, {}, {}
     for r in rows[1:]:
         d = _date(r[ci]) if ci is not None and ci < len(r) else None
         if not d or not (start <= d <= end):
@@ -105,9 +107,11 @@ def sheet(start, end):
         cell = lambda i: r[i] if i is not None and i < len(r) else ""
         o, v = days.get(d, (0, 0.0))
         days[d] = (o + int(_num(cell(co))), v + _num(cell(cv)))
+        if cp is not None and cell(cp).strip():
+            profit[d] = profit.get(d, 0.0) + _num(cell(cp))
         if cell(cw).strip():
             wins[d] = cell(cw).strip()
-    return days, wins
+    return days, wins, profit
 
 
 def period(today, calendar):
@@ -122,12 +126,12 @@ def collect(today, calendar):
     start, end = period(today, calendar)
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []
-    wins = {}
+    wins, profit = {}, {}
     for name, fn in (("Wildberries", wildberries), ("Ozon", ozon), ("таблица", sheet)):
         try:
             got = fn(first, end)
             if name == "таблица":
-                got, wins = got
+                got, wins, profit = got
         except Exception as e:  # один сломанный источник не должен ломать напутствие
             errors.append(f"{name}: {type(e).__name__}")
             continue
@@ -142,6 +146,7 @@ def collect(today, calendar):
     window = lambda s: [s + dt.timedelta(days=i) for i in range(length)]
     summ = lambda s: (sum(total.get(d, (0, 0))[0] for d in window(s)), sum(total.get(d, (0, 0.0))[1] for d in window(s)))
     orders, revenue = summ(start)
+    period_profit = [profit[d] for d in window(start) if d in profit]
     prev_orders, _ = summ(start - dt.timedelta(days=length))
     past = [summ(first + dt.timedelta(days=i))[0] for i in range((start - first).days - length + 1)]
     past = [p for p in past if p]
@@ -157,7 +162,8 @@ def collect(today, calendar):
     else:
         level = "support"
     return {"level": level, "start": start.isoformat(), "end": end.isoformat(), "days": length,
-            "orders": orders, "revenue": round(revenue), "prev_orders": prev_orders,
+            "orders": orders, "revenue": round(revenue),
+            "profit": round(sum(period_profit)) if period_profit else None, "prev_orders": prev_orders,
             "wins": [wins[d] for d in sorted(wins) if start <= d <= end],
             "sources": sources, "errors": errors}
 
@@ -180,6 +186,8 @@ def stats_line(r):
         s = f"Итоги {when}: {num(o)} {_plural(o, 'заказ', 'заказа', 'заказов')}"
         if r["revenue"]:
             s += f", {num(r['revenue'])} ₽ выручки"
+        if r.get("profit"):
+            s += f", {num(r['profit'])} ₽ прибыли"
         if r["level"] == "record":
             s += " — лучший результат за месяц!"
         elif r["level"] == "up" and r["prev_orders"]:
