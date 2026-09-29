@@ -49,7 +49,11 @@ def todays_text(date, level="support", data=None):
 
 
 def results_reaction(date, level, data):
-    """Поддерживающая фраза с пожеланием после цифр; каждый день — следующая по кругу."""
+    """Поддерживающая фраза с пожеланием после цифр: свежая из daily[дата]["reaction_<уровень>"],
+    а если её нет — из запасного набора results_reactions, каждый день следующая по кругу."""
+    daily = data.get("daily", {}).get(date)
+    if isinstance(daily, dict) and daily.get(f"reaction_{level}"):
+        return daily[f"reaction_{level}"]
     options = data.get("results_reactions", {}).get(level) or []
     return options[dt.date.fromisoformat(date).toordinal() % len(options)] if options else ""
 
