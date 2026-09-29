@@ -1,0 +1,44 @@
+name: Разведка API TrueStats (временно)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ищем описание API на публичных страницах
+        shell: python
+        run: |
+          import re, urllib.request, html
+          def get(u):
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=20)
+                  return r.status, r.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode("utf-8", "replace")[:300]
+              except Exception as e:
+                  return type(e).__name__, ""
+          seen = set()
+          def show(u, depth=0):
+              if u in seen or len(seen) > 60: return
+              seen.add(u)
+              st, body = get(u)
+              title = re.search(r"<title>(.*?)</title>", body, re.S)
+              print(f"\n=== {u} -> {st} | {html.unescape(title.group(1).strip()) if title else ''}")
+              text = html.unescape(re.sub(r"<[^>]+>", " ", body))
+              for m in re.finditer(r"[^.\n]{0,160}\b(API|api|Api|токен|Токен|endpoint|Authorization|Bearer)\b[^.\n]{0,200}", text):
+                  print("  >", " ".join(m.group(0).split())[:360])
+              links = set(re.findall(r'href="([^"]+)"', body))
+              for l in sorted(links):
+                  if re.search(r"api|swagger|openapi|docs|integra|интеграц", l, re.I):
+                      full = urllib.parse.urljoin(u, l)
+                      print("  link:", full)
+                      if depth < 1 and ("truestats" in full):
+                          show(full, depth + 1)
+          import urllib.parse
+          for u in ["https://truestats.ru/", "https://truestats.usedocs.com/", "https://truestats.usedocs.com/collection/7661",
+                    "https://api.truestats.ru/", "https://api.truestats.ru/docs", "https://api.truestats.ru/swagger",
+                    "https://app.truestats.ru/api/docs", "https://app.truestats.ru/api", "https://truestats.ru/api",
+                    "https://truestats.ru/api/docs", "https://lk.truestats.ru/", "https://app.truestats.ru/"]:
+              show(u)
