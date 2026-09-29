@@ -24,15 +24,23 @@ import io
 import json
 import os
 import re
+import time
+import urllib.error
 import urllib.request
 
 HISTORY_DAYS = 30
 
 
-def _get(url, headers=None, data=None):
+def _get(url, headers=None, data=None, retry=True):
     req = urllib.request.Request(url, headers=headers or {}, data=data)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return resp.read().decode("utf-8-sig")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.read().decode("utf-8-sig")
+    except urllib.error.HTTPError as e:
+        if e.code == 429 and retry:  # лимит запросов у WB и Ozon — ждём минуту и пробуем ещё раз
+            time.sleep(61)
+            return _get(url, headers, data, retry=False)
+        raise
 
 
 def _num(s):
@@ -133,7 +141,7 @@ def collect(today, calendar):
             if name == "таблица":
                 got, wins, profit = got
         except Exception as e:  # один сломанный источник не должен ломать напутствие
-            errors.append(f"{name}: {type(e).__name__}")
+            errors.append(f"{name}: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
             continue
         if got is None:
             continue
