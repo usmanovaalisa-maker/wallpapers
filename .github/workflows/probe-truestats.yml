@@ -7,38 +7,61 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Ищем описание API на публичных страницах
+      - name: Читаем раздел «API / Интеграции» и адреса API в веб-приложении
         shell: python
         run: |
-          import re, urllib.request, html
-          def get(u):
+          import re, urllib.request, urllib.parse, html
+          def get(u, headers=None):
               try:
-                  r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=20)
+                  r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0", **(headers or {})}), timeout=30)
                   return r.status, r.read().decode("utf-8", "replace")
               except urllib.error.HTTPError as e:
-                  return e.code, e.read().decode("utf-8", "replace")[:300]
+                  return e.code, e.read().decode("utf-8", "replace")[:500]
               except Exception as e:
                   return type(e).__name__, ""
-          seen = set()
-          def show(u, depth=0):
-              if u in seen or len(seen) > 60: return
-              seen.add(u)
-              st, body = get(u)
-              title = re.search(r"<title>(.*?)</title>", body, re.S)
-              print(f"\n=== {u} -> {st} | {html.unescape(title.group(1).strip()) if title else ''}")
-              text = html.unescape(re.sub(r"<[^>]+>", " ", body))
-              for m in re.finditer(r"[^.\n]{0,160}\b(API|api|Api|токен|Токен|endpoint|Authorization|Bearer)\b[^.\n]{0,200}", text):
-                  print("  >", " ".join(m.group(0).split())[:360])
-              links = set(re.findall(r'href="([^"]+)"', body))
-              for l in sorted(links):
-                  if re.search(r"api|swagger|openapi|docs|integra|интеграц", l, re.I):
-                      full = urllib.parse.urljoin(u, l)
-                      print("  link:", full)
-                      if depth < 1 and ("truestats" in full):
-                          show(full, depth + 1)
-          import urllib.parse
-          for u in ["https://truestats.ru/", "https://truestats.usedocs.com/", "https://truestats.usedocs.com/collection/7661",
-                    "https://api.truestats.ru/", "https://api.truestats.ru/docs", "https://api.truestats.ru/swagger",
-                    "https://app.truestats.ru/api/docs", "https://app.truestats.ru/api", "https://truestats.ru/api",
-                    "https://truestats.ru/api/docs", "https://lk.truestats.ru/", "https://app.truestats.ru/"]:
-              show(u)
+          text = lambda b: " ".join(html.unescape(re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", b, flags=re.S)).split())
+
+          st, home = get("https://truestats.usedocs.com/")
+          links = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', home, re.S)
+          print("=== usedocs links")
+          cols = []
+          for href, t in links:
+              t = text(t)
+              full = urllib.parse.urljoin("https://truestats.usedocs.com/", href)
+              if "/collection/" in full or "/category/" in full or "/article/" in full:
+                  print(" ", full, "|", t[:100])
+                  if re.search(r"API|Интеграц", t):
+                      cols.append(full)
+          arts = []
+          for c in cols:
+              st, b = get(c)
+              print(f"\n=== {c} -> {st}")
+              for href, t in re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', b, re.S):
+                  full = urllib.parse.urljoin(c, href)
+                  if "/article/" in full:
+                      print(" ", full, "|", text(t)[:120])
+                      arts.append(full)
+          for a in list(dict.fromkeys(arts))[:15]:
+              st, b = get(a)
+              body = re.search(r'<article.*?</article>|<div[^>]+class="[^"]*article[^"]*".*', b, re.S)
+              print(f"\n=== ARTICLE {a} -> {st}\n", text(body.group(0) if body else b)[:6000])
+
+          print("\n=== api.truestats.ru root")
+          print(get("https://api.truestats.ru/"))
+          for p in ["/api", "/api/v1", "/v1", "/api/doc", "/api/docs.json", "/docs.json", "/api/doc.json", "/openapi.json", "/api/openapi.json"]:
+              st, b = get("https://api.truestats.ru" + p)
+              print(p, st, b[:200].replace("\n", " "))
+
+          print("\n=== app.truestats.ru bundles")
+          st, app = get("https://app.truestats.ru/")
+          srcs = re.findall(r'(?:src|href)="([^"]+\.js)"', app)
+          print(srcs)
+          found = set()
+          for s in srcs[:10]:
+              st, js = get(urllib.parse.urljoin("https://app.truestats.ru/", s))
+              for m in re.findall(r'["`\'](https?://api\.truestats\.ru[^"`\']*|/api/[a-zA-Z0-9_\-/{}.$]+)["`\']', js):
+                  found.add(m)
+              for m in re.findall(r'.{0,80}(?:X-Api-Key|x-api-key|Api-Key|apiKey|api_key|Bearer).{0,80}', js):
+                  found.add("AUTH: " + m)
+          for f in sorted(found)[:300]:
+              print(" ", f)
