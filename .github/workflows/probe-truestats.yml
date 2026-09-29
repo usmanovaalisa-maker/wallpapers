@@ -9,64 +9,54 @@ jobs:
     env:
       TRUE_STATS: ${{ secrets.TRUE_STATS }}
     steps:
-      - name: Читаем документацию публичного API (в лог — только описание и коды ответов, без данных)
+      - name: Формат метода «по дням» и пробный вызов (в лог — только структура, без сумм)
         shell: python
         run: |
-          import re, os, json, urllib.request, html
-          key = os.environ.get("TRUE_STATS", "").strip()
-          print("ключ задан:", bool(key), "длина:", len(key))
-          def get(u, auth=None):
-              h = {"User-Agent": "Mozilla/5.0", "Accept": "application/json, text/html"}
-              if auth == "x": h["X-AUTH-TOKEN"] = key
-              if auth == "b": h["Authorization"] = "Bearer " + key
+          import re, os, json, html, urllib.request, datetime as dt
+          key = os.environ["TRUE_STATS"].strip()
+          def req(u, body=None, auth=True):
+              h = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "Content-Type": "application/json"}
+              if auth: h["X-Api-Token"] = key
+              r = urllib.request.Request(u, headers=h, data=json.dumps(body).encode() if body is not None else None)
               try:
-                  r = urllib.request.urlopen(urllib.request.Request(u, headers=h), timeout=30)
-                  return r.status, r.headers.get("Content-Type", ""), r.read().decode("utf-8", "replace")
+                  with urllib.request.urlopen(r, timeout=60) as resp:
+                      return resp.status, resp.read().decode("utf-8", "replace")
               except urllib.error.HTTPError as e:
-                  return e.code, e.headers.get("Content-Type", ""), e.read().decode("utf-8", "replace")[:400]
-              except Exception as e:
-                  return type(e).__name__, "", ""
-          text = lambda b: " ".join(html.unescape(re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", b, flags=re.S)).split())
+                  return e.code, e.read().decode("utf-8", "replace")[:800]
+          st, b = req("https://api.truestats.ru/api/public/doc", auth=False)
+          m = re.search(r'id="swagger-data"[^>]*>(.*?)</script>', b, re.S)
+          spec = json.loads(html.unescape(m.group(1)))
+          spec = spec.get("spec", spec)
+          print("servers:", spec.get("servers"))
+          schemas = spec["components"]["schemas"]
+          def resolve(x, depth=0):
+              if depth > 6: return "…"
+              if isinstance(x, dict):
+                  if "$ref" in x: return resolve(schemas.get(x["$ref"].split("/")[-1], {}), depth + 1)
+                  return {k: resolve(v, depth + 1) for k, v in x.items() if k not in ("example",) or depth < 3}
+              if isinstance(x, list): return [resolve(i, depth + 1) for i in x]
+              return x
+          for path in ["/reporting/aggregated-view/day", "/reporting/main/stats", "/v1/accounts", "/accounts"]:
+              op = spec["paths"].get(path, {}).get("post") or spec["paths"].get(path, {}).get("get")
+              if not op: continue
+              print(f"\n=== {path}: {op.get('summary')}\n{op.get('description','')}")
+              print("REQUEST:", json.dumps(resolve(op.get("requestBody", {})), ensure_ascii=False)[:5000])
+              print("RESPONSES:", json.dumps(resolve(op.get("responses", {})), ensure_ascii=False)[:6000])
+          acc = [p for p in spec["paths"] if "account" in p.lower()]
+          print("\naccount paths:", acc)
 
-          st, ct, b = get("https://truestats.usedocs.com/article/84276")
-          body = re.search(r'<article.*?</article>', b, re.S)
-          print("\n=== ARTICLE API / Интеграции", st, "\n", text(body.group(0) if body else b)[:8000])
-
-          for base in ["https://api.truestats.ru", "https://app.truestats.ru"]:
-              for auth in (None, "x", "b"):
-                  st, ct, b = get(base + "/api/public/doc", auth)
-                  print(f"\n=== {base}/api/public/doc auth={auth} -> {st} {ct} len={len(b)}")
-                  if st == 200:
-                      # печатаем документацию: это описание методов, не данные
-                      spec = re.search(r'(\{"openapi".*?\})\s*</script>|(\{"swagger".*?\})\s*</script>|data-spec="([^"]+)"', b, re.S)
-                      if "json" in ct:
-                          try:
-                              d = json.loads(b)
-                              for p, ops in d.get("paths", {}).items():
-                                  for m, op in ops.items():
-                                      params = [x.get("name") for x in op.get("parameters", [])]
-                                      print(f"  {m.upper()} {p} | {op.get('summary','')} | params={params}")
-                              print("  securitySchemes:", json.dumps(d.get("components", {}).get("securitySchemes", {}), ensure_ascii=False))
-                          except Exception as e:
-                              print("  json err", e, b[:1500])
-                      else:
-                          m = re.search(r'id="swagger-data"[^>]*>(.*?)</script>', b, re.S)
-                          if m:
-                              d = json.loads(html.unescape(m.group(1)))
-                              spec = d.get("spec", d)
-                              for p, ops in spec.get("paths", {}).items():
-                                  for mm, op in ops.items():
-                                      if not isinstance(op, dict): continue
-                                      params = [(x.get("name"), x.get("in")) for x in op.get("parameters", [])]
-                                      print(f"  {mm.upper()} {p} | {op.get('summary','')} | params={params}")
-                                      rb = op.get("requestBody")
-                                      if rb: print("     body:", json.dumps(rb, ensure_ascii=False)[:600])
-                              print("  securitySchemes:", json.dumps(spec.get("components", {}).get("securitySchemes", {}), ensure_ascii=False))
-                              print("  schemas:", list(spec.get("components", {}).get("schemas", {}).keys())[:80])
-                          else:
-                              print(text(b)[:3000])
-                      break
-          for p in ["/api/v1/accounts", "/api/public/v1/accounts"]:
-              for auth in ("x", "b"):
-                  st, ct, b = get("https://api.truestats.ru" + p, auth)
-                  print(f"check {p} auth={auth} -> {st}")
+          base = (spec.get("servers") or [{"url": "https://api.truestats.ru"}])[0]["url"].rstrip("/")
+          y = dt.date.today() - dt.timedelta(days=1)
+          body = {"dateFrom": (y - dt.timedelta(days=6)).isoformat(), "dateTo": y.isoformat()}
+          for b2 in (body, {"period": body}, {"date_from": body["dateFrom"], "date_to": body["dateTo"]}):
+              st, r = req(base + "/reporting/aggregated-view/day", b2)
+              print(f"\nCALL body-keys={list(b2)} -> {st}")
+              if st != 200:
+                  print("  error:", r[:600]); continue
+              d = json.loads(r)
+              def shape(x, depth=0):
+                  if isinstance(x, dict): return {k: shape(v, depth + 1) for k, v in list(x.items())[:60]} if depth < 5 else "{…}"
+                  if isinstance(x, list): return [shape(x[0], depth + 1), f"…×{len(x)}"] if x else []
+                  return type(x).__name__
+              print("  shape:", json.dumps(shape(d), ensure_ascii=False)[:6000])
+              break
