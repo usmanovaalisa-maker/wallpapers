@@ -48,6 +48,12 @@ def todays_text(date, level="support", data=None):
     return daily or data.get("calendar", {}).get(date)
 
 
+def results_reaction(date, level, data):
+    """Поддерживающая фраза с пожеланием после цифр; каждый день — следующая по кругу."""
+    options = data.get("results_reactions", {}).get(level) or []
+    return options[dt.date.fromisoformat(date).toordinal() % len(options)] if options else ""
+
+
 def day_results(date, data):
     """Итоги прошедшего дня: считаем один раз за запуск (у WB лимит — 1 запрос в минуту)
     и держим во временной папке раннера, вне репозитория."""
@@ -121,6 +127,9 @@ def main():
     print(f"{date}: {text}" + ("\n(+ строка с итогами дня — в лог не выводится)" if stats else ""))
     if stats:
         text = f"{text}\n\n{stats}"
+        reaction = results_reaction(date, results["level"], data)
+        if reaction:
+            text += f"\n\n{reaction}"
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
     if os.environ.get("DRY_RUN") == "1":
         return
