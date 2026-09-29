@@ -8,6 +8,8 @@ daily[дата] может быть объектом с вариантами п�
 
 Переменные окружения:
   BITRIX_WEBHOOK_URL  входящий вебхук, например https://company.bitrix24.ru/rest/1/abc123/
+  BITRIX_CHAT_NAME    название группового чата (например «Доброплан 2026») — скрипт сам найдёт его ID;
+                      важнее BITRIX_DIALOG_ID. Владелец вебхука должен состоять в этом чате.
   BITRIX_DIALOG_ID    куда писать: chat123 (групповой чат) или ID пользователя (личное сообщение,
                       например для проверки — свой ID).
                       Если не задан — пост в Живую ленту для всех сотрудников.
@@ -100,6 +102,18 @@ def call(webhook, method, payload, fail=True):
     return body
 
 
+def find_chat(webhook, name):
+    """ID группового чата по названию (без учёта регистра) → "chat123" или None."""
+    want = " ".join(name.lower().split())
+    found = call(webhook, "im.search.chat.list", {"FIND": name}, fail=False).get("result") or []
+    if not found:
+        found = [i.get("chat") or i for i in (call(webhook, "im.recent.list", {}, fail=False).get("result") or {}).get("items", [])]
+    for c in found:
+        if " ".join(str(c.get("title") or c.get("name") or "").lower().split()) == want and c.get("id"):
+            return f"chat{c['id']}"
+    return None
+
+
 def todays_date():
     tz = ZoneInfo(os.environ.get("WISH_TZ") or "Europe/Samara")
     return os.environ.get("WISH_DATE") or dt.datetime.now(tz).date().isoformat()
@@ -136,15 +150,23 @@ def main():
         if reaction:
             text += f"\n\n{reaction}"
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
-    if os.environ.get("DRY_RUN") == "1":
-        return
     if not webhook:
         print("::warning::Не задан секрет BITRIX_WEBHOOK_URL — сообщение не отправлено.")
+        return
+    dialog = os.environ.get("BITRIX_DIALOG_ID", "").strip()
+    chat_name = os.environ.get("BITRIX_CHAT_NAME", "").strip()
+    if chat_name:
+        chat = find_chat(webhook, chat_name)
+        if chat:
+            print(f"Чат «{chat_name}»: {chat}")
+            dialog = chat
+        else:
+            print(f"::warning::Чат «{chat_name}» не найден (владелец вебхука в нём состоит?) — пишу в {dialog or 'Живую ленту'}.")
+    if os.environ.get("DRY_RUN") == "1":
         return
 
     card_url = os.environ.get("CARD_URL", "").strip()
     card_file = ROOT / "cards" / f"{date}.jpg"
-    dialog = os.environ.get("BITRIX_DIALOG_ID", "").strip()
     if dialog:
         payload = {"MESSAGE": f"[B]{title}[/B]\n\n{text}"}
         if card_url:
