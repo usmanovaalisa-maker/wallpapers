@@ -83,6 +83,7 @@ def ozon(start, end):
     cid, key = os.environ.get("OZON_CLIENT_ID", "").strip(), os.environ.get("OZON_API_KEY", "").strip()
     if not (cid and key):
         return None
+    end = min(end, dt.date.today())  # будущие даты Ozon отклоняет с ошибкой 400
     body = {"date_from": start.isoformat(), "date_to": end.isoformat(),
             "metrics": ["ordered_units", "revenue"], "dimension": ["day"], "limit": 1000, "offset": 0}
     res = json.loads(_get("https://api-seller.ozon.ru/v1/analytics/data",
