@@ -137,7 +137,7 @@ def collect(today, calendar):
             continue
         if got is None:
             continue
-        sources.append(name)
+        sources.append(f"{name} ({sum(1 for o, _ in got.values() if o)} дн. с заказами)")
         for d, (o, v) in got.items():
             to, tv = total.get(d, (0, 0.0))
             total[d] = (to + o, tv + v)
