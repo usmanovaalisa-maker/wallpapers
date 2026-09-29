@@ -1,9 +1,11 @@
-"""Итоги прошедшего дня для напутствия команде: Wildberries, Ozon и Google-таблица.
+"""Итоги прошедшего дня для напутствия команде: TrueStats, Wildberries, Ozon и Google-таблица.
 
 Репозиторий публичный, поэтому цифры никуда не сохраняются и не печатаются в лог —
 они попадают только в сообщение в Битрикс24.
 
 Переменные окружения (любой источник можно не задавать):
+  TRUE_STATS            API-токен TrueStats. Если он работает, заказы, их сумма и прибыль по всем
+                        магазинам берутся отсюда, а Wildberries и Ozon напрямую не опрашиваются
   WB_API_TOKEN          токен API Wildberries (категория «Статистика», только чтение)
   OZON_CLIENT_ID        Client-Id продавца Ozon
   OZON_API_KEY          API-ключ Ozon (роль с доступом к аналитике)
@@ -97,6 +99,24 @@ def ozon(start, end):
     return days
 
 
+def truestats(start, end):
+    """Заказы, сумма заказов и прибыль по дням из TrueStats (все подключённые магазины)."""
+    key = os.environ.get("TRUE_STATS", "").strip()
+    if not key:
+        return None, {}
+    res = json.loads(_get("https://api.truestats.ru/reporting/aggregated-view/day",
+                          {"X-Api-Token": key, "Content-Type": "application/json", "Accept": "application/json"},
+                          json.dumps({"dateFrom": start.isoformat(), "dateTo": end.isoformat()}).encode()))
+    days, profit = {}, {}
+    for r in res.get("result", []):
+        d = _date(r.get("date"))
+        if d and start <= d <= end:
+            days[d] = (int(_num(r.get("ordersCount"))), _num(r.get("orders")))
+            if r.get("profit") is not None:
+                profit[d] = _num(r.get("profit"))
+    return days, profit
+
+
 def sheet(start, end):
     url = os.environ.get("RESULTS_SHEET_CSV_URL", "").strip()
     if not url:
@@ -136,11 +156,19 @@ def collect(today, calendar):
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []
     wins, profit = {}, {}
-    for name, fn in (("Wildberries", wildberries), ("Ozon", ozon), ("таблица", sheet)):
+    use_ts = False
+    for name, fn in (("TrueStats", truestats), ("Wildberries", wildberries), ("Ozon", ozon), ("таблица", sheet)):
+        if use_ts and name in ("Wildberries", "Ozon"):
+            continue  # TrueStats уже включает эти магазины — не считаем заказы дважды
         try:
             got = fn(first, end)
-            if name == "таблица":
-                got, wins, profit = got
+            if name == "TrueStats":
+                got, profit = got
+                use_ts = bool(got)
+            elif name == "таблица":
+                got, wins, sheet_profit = got
+                if not use_ts:
+                    profit = sheet_profit
         except Exception as e:  # один сломанный источник не должен ломать напутствие
             errors.append(f"{name}: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
             continue
@@ -194,7 +222,7 @@ def stats_line(r):
         num = lambda n: f"{n:,}".replace(",", "\u00a0")
         s = f"Итоги {when}: {num(o)} {_plural(o, 'заказ', 'заказа', 'заказов')}"
         if r["revenue"]:
-            s += f", {num(r['revenue'])} ₽ выручки"
+            s += f" на {num(r['revenue'])} ₽"
         if r.get("profit"):
             s += f", {num(r['profit'])} ₽ прибыли"
         if r["level"] == "record":
