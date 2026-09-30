@@ -73,6 +73,8 @@ jobs:
         env:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
           BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
-          BITRIX_CHAT_NAME: ${{ (github.event_name == 'workflow_dispatch' && inputs.to_me) && '' || (vars.NG_CHAT_NAME || 'НГ 2026-2027') }}
+          BITRIX_CHAT_NAME: ${{ vars.NG_CHAT_NAME || 'НГ 2026-2027' }}
+          # тест «мне»: чат не ищем, пишем в BITRIX_DIALOG_ID (пустая строка в выражениях GitHub — «ложь», поэтому флагом)
+          SEND_TO_ME: ${{ (github.event_name == 'workflow_dispatch' && inputs.to_me) && '1' || '' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           CARD_URL: ${{ steps.save.outputs.url }}

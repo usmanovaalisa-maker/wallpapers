@@ -10,6 +10,7 @@ daily[дата] может быть объектом с вариантами п�
   BITRIX_WEBHOOK_URL  входящий вебхук, например https://company.bitrix24.ru/rest/1/abc123/
   BITRIX_CHAT_NAME    название группового чата (например «Доброплан 2026 _ Чат руководителей») — скрипт сам найдёт его ID;
                       важнее BITRIX_DIALOG_ID. Владелец вебхука должен состоять в этом чате.
+  SEND_TO_ME=1        тестовая отправка в BITRIX_DIALOG_ID, чат по названию не ищется
   BITRIX_DIALOG_ID    куда писать: chat123 (групповой чат) или ID пользователя (личное сообщение,
                       например для проверки — свой ID).
                       Если не задан — пост в Живую ленту для всех сотрудников.
@@ -184,6 +185,11 @@ def main():
         return
     dialog = os.environ.get("BITRIX_DIALOG_ID", "").strip()
     chat_name = os.environ.get("BITRIX_CHAT_NAME", "").strip()
+    if os.environ.get("SEND_TO_ME") == "1":
+        if not dialog:
+            sys.exit("Тест «мне»: не задан BITRIX_DIALOG_ID — не отправляю, чтобы сообщение не ушло в общий чат.")
+        print(f"Тест: отправляю в {dialog}, а не в чат «{chat_name}».")
+        chat_name = ""
     if chat_name:
         chat = find_chat(webhook, chat_name)
         if chat:
