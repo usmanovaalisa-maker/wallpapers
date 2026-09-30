@@ -145,12 +145,12 @@ def main():
         return
     results, stats = day_results(date, data)
     text = todays_text(date, results["level"], data)
-    # пожелание идёт и в сообщение (после цифр), и на картинку (без цифр) — только когда есть итоги
+    # пожелание идёт в сообщение (после цифр) и одно — на картинку; без итогов на картинке основной текст
     reaction = results_reaction(date, results["level"], data) if stats else ""
 
     if os.environ.get("CARD") == "1":
         from make_card import make_card
-        card = make_card(date, text, reaction)
+        card = make_card(date, reaction or text)
         print(f"Картинка: {card}")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:

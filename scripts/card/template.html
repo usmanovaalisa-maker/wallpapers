@@ -3,61 +3,80 @@
 <html lang="ru"><head><meta charset="utf-8">
 <link href="fonts.css" rel="stylesheet">
 <style>
-  :root { --purple:#876db0; --blue:#4c76bb; --yellow:#f2c926; --ink:#2b2b33; --sub:#6b6b78; }
+  :root { --purple:#876db0; --deep:#5b3f93; --blue:#4c76bb; --yellow:#f2c926; --pink:#ff7eb3; --mint:#5fd3b3; --ink:#2b2b33; }
   * { box-sizing:border-box; margin:0; }
   body { width:1080px; height:1080px; overflow:hidden; font-family:Nunito, sans-serif; }
   .poster { position:relative; width:1080px; height:1080px; overflow:hidden;
     background:
-      radial-gradient(520px 420px at 8% 6%, #efe7fb 0%, transparent 70%),
-      radial-gradient(560px 460px at 100% 100%, #e3ecfa 0%, transparent 70%),
-      radial-gradient(480px 380px at 96% 8%, #fdf3cf 0%, transparent 70%),
-      #fffaf3;
-    display:flex; flex-direction:column; align-items:center; padding:40px 72px 0; }
-  .bubble { position:absolute; border-radius:50%; background:#fff; box-shadow:0 6px 24px rgba(135,109,176,.10); }
-  .star { position:absolute; }
-  .logo { width:300px; position:relative; }
-  h1 { font-weight:900; font-size:92px; line-height:1; color:var(--purple); letter-spacing:-1px; white-space:nowrap; position:relative; }
-  .date { position:relative; margin-top:16px; font-weight:800; font-size:30px; color:var(--blue); background:#edf2fb; padding:10px 28px; border-radius:999px; }
-  .card { position:relative; margin-top:30px; width:100%; height:430px; background:#fff; border-radius:44px; padding:40px 56px;
-    box-shadow:0 24px 60px rgba(76,118,187,.16); border:3px solid #f1ecfa; display:flex; align-items:center; justify-content:center; }
-  .content { display:flex; flex-direction:column; align-items:center; gap:22px; }
-  .text { font-weight:800; font-size:58px; line-height:1.2; color:var(--ink); text-align:center; }
-  .wish { font-weight:700; line-height:1.3; color:var(--purple); text-align:center; }
-  .wish::before { content:""; display:block; width:120px; height:4px; margin:0 auto 22px; border-radius:2px; background:var(--yellow); }
-  .wish:empty { display:none; }
-  .footer { position:relative; margin-top:30px; font-weight:600; font-size:30px; color:var(--sub); }
-  .footer b { color:var(--purple); font-weight:800; }
+      radial-gradient(620px 520px at 0% 0%, #ffd9ec 0%, transparent 70%),
+      radial-gradient(640px 560px at 100% 100%, #d6e6ff 0%, transparent 70%),
+      radial-gradient(560px 480px at 100% 0%, #fff0b3 0%, transparent 70%),
+      radial-gradient(520px 460px at 0% 100%, #d9f7ec 0%, transparent 70%),
+      #fdf6ff;
+    display:flex; flex-direction:column; align-items:center; padding:46px 80px 0; }
+  #confetti { position:absolute; inset:0; }
+  .piece { position:absolute; border-radius:3px; }
+  .balloon { position:absolute; }
+  .logo { width:250px; position:relative; }
+  .badge { position:relative; margin-top:6px; transform:rotate(-3deg); background:var(--purple); color:#fff;
+    font-weight:900; font-size:64px; line-height:1; padding:18px 44px 22px; border-radius:30px;
+    box-shadow:0 10px 0 var(--deep), 0 22px 40px rgba(91,63,147,.35); letter-spacing:-.5px; white-space:nowrap; }
+  .date { position:relative; margin-top:30px; font-weight:800; font-size:28px; color:var(--deep);
+    background:#fff; padding:9px 26px; border-radius:999px; box-shadow:0 6px 18px rgba(135,109,176,.18); }
+  .card { position:relative; margin-top:34px; width:100%; height:470px; background:#fff; border-radius:52px;
+    padding:48px 64px; box-shadow:0 26px 60px rgba(135,109,176,.28); border:6px dashed #f3d9f0;
+    display:flex; align-items:center; justify-content:center; }
+  .text { font-weight:900; font-size:60px; line-height:1.18; color:var(--ink); text-align:center; }
+  .text .hl { color:var(--purple); }
+  .gift { position:absolute; right:-34px; bottom:-40px; width:170px; transform:rotate(12deg); }
+  .heart { position:absolute; left:-26px; top:-30px; width:96px; transform:rotate(-14deg); }
+  .footer { position:relative; margin-top:40px; font-weight:800; font-size:30px; color:var(--deep); }
+  .footer b { color:var(--pink); font-weight:900; }
 </style></head>
 <body><div class="poster">
-  <div class="bubble" style="width:150px;height:150px;left:-40px;top:260px"></div>
-  <div class="bubble" style="width:60px;height:60px;left:130px;top:220px"></div>
-  <div class="bubble" style="width:190px;height:190px;right:-60px;top:170px"></div>
-  <div class="bubble" style="width:70px;height:70px;right:160px;top:100px"></div>
-  <div class="bubble" style="width:120px;height:120px;left:40px;bottom:10px"></div>
-  <div class="bubble" style="width:46px;height:46px;right:120px;bottom:40px"></div>
-  <svg class="star" style="left:150px;top:80px" width="54" height="54" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#f2c926"/></svg>
-  <svg class="star" style="right:150px;top:300px" width="40" height="40" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#876db0"/></svg>
-  <svg class="star" style="left:110px;top:420px" width="34" height="34" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#4c76bb"/></svg>
-  <svg class="star" style="right:60px;bottom:90px" width="50" height="50" viewBox="0 0 24 24"><path d="M12 0C13 7 17 11 24 12C17 13 13 17 12 24C11 17 7 13 0 12C7 11 11 7 12 0Z" fill="#f2c926"/></svg>
+  <div id="confetti"></div>
+
+  <svg class="balloon" style="left:40px;top:230px" width="120" height="220" viewBox="0 0 60 110"><path d="M30 2C14 2 4 15 4 30c0 18 15 32 26 36 11-4 26-18 26-36C56 15 46 2 30 2z" fill="#ff7eb3"/><path d="M27 66h6l-3 5z" fill="#ff7eb3"/><path d="M30 71c-6 10 6 18 0 28s4 10 0 11" stroke="#e0a3c4" stroke-width="1.5" fill="none"/><ellipse cx="21" cy="20" rx="5" ry="8" fill="#fff" opacity=".45"/></svg>
+  <svg class="balloon" style="right:44px;top:150px" width="130" height="240" viewBox="0 0 60 110"><path d="M30 2C14 2 4 15 4 30c0 18 15 32 26 36 11-4 26-18 26-36C56 15 46 2 30 2z" fill="#f2c926"/><path d="M27 66h6l-3 5z" fill="#f2c926"/><path d="M30 71c-6 10 6 18 0 28s4 10 0 11" stroke="#d8c27a" stroke-width="1.5" fill="none"/><ellipse cx="21" cy="20" rx="5" ry="8" fill="#fff" opacity=".5"/></svg>
+  <svg class="balloon" style="right:150px;top:40px" width="80" height="150" viewBox="0 0 60 110"><path d="M30 2C14 2 4 15 4 30c0 18 15 32 26 36 11-4 26-18 26-36C56 15 46 2 30 2z" fill="#4c76bb"/><path d="M27 66h6l-3 5z" fill="#4c76bb"/><path d="M30 71c-6 10 6 18 0 28s4 10 0 11" stroke="#9db3d9" stroke-width="1.5" fill="none"/><ellipse cx="21" cy="20" rx="5" ry="8" fill="#fff" opacity=".4"/></svg>
 
   <img class="logo" src="../../logo.svg" alt="">
-  <h1>Напутствие дня</h1>
+  <div class="badge">Напутствие дня</div>
   <div class="date" id="date">вторник, 29 сентября</div>
-  <div class="card"><div class="content" id="content"><div class="text" id="text">Доброе утро, команда!</div><div class="wish" id="wish"></div></div></div>
+  <div class="card">
+    <svg class="heart" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.8 8.2 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.8 3.7 4.2 7.3C19.5 16.4 12 21 12 21z" fill="#ff7eb3"/></svg>
+    <div class="text" id="text">Доброе утро, команда!</div>
+    <svg class="gift" viewBox="0 0 100 100"><rect x="12" y="44" width="76" height="50" rx="8" fill="#876db0"/><rect x="6" y="30" width="88" height="20" rx="6" fill="#9d86c4"/><rect x="44" y="30" width="12" height="64" fill="#f2c926"/><path d="M50 30c-6-14-26-18-26-6 0 8 14 8 26 6zM50 30c6-14 26-18 26-6 0 8-14 8-26 6z" fill="#f2c926"/><circle cx="50" cy="29" r="5" fill="#e0b41a"/></svg>
+  </div>
   <div class="footer">С заботой — <b>«Дари Сейчас»</b></div>
 </div>
 <script>
-  // Подставляет текст и пожелание и уменьшает шрифт, пока всё не поместится в карточку
-  window.fill = (text, date, wish) => {
-    const el = document.getElementById('text'), w = document.getElementById('wish');
-    const content = document.getElementById('content'), card = content.parentElement;
+  // Конфетти: раскладка зависит от даты, поэтому каждый день немного другая
+  function confetti(seed) {
+    let s = seed; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    const colors = ['#ff7eb3', '#f2c926', '#4c76bb', '#876db0', '#5fd3b3', '#ff9f5a'];
+    const box = document.getElementById('confetti'); box.innerHTML = '';
+    for (let i = 0; i < 70; i++) {
+      const p = document.createElement('div'); p.className = 'piece';
+      const x = rnd() * 1080, y = rnd() * 1080;
+      // не сыпем конфетти на карточку с текстом и подпись
+      if ((x > 60 && x < 1020 && y > 470 && y < 960) || (x > 280 && x < 800 && y > 1000)) { i--; continue; }
+      const round = rnd() < .35, w = 10 + rnd() * 14, h = round ? w : 6 + rnd() * 8;
+      Object.assign(p.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px',
+        background: colors[Math.floor(rnd() * colors.length)], borderRadius: round ? '50%' : '3px',
+        transform: `rotate(${Math.floor(rnd() * 180)}deg)`, opacity: .85 });
+      box.appendChild(p);
+    }
+  }
+  // Подставляет текст и уменьшает шрифт, пока текст не поместится в карточку
+  window.fill = (text, date, seed) => {
+    const el = document.getElementById('text'), card = el.parentElement;
     document.getElementById('date').textContent = date;
     el.textContent = text;
-    w.textContent = wish || '';
-    let size = wish ? 50 : 58;
-    const apply = () => { el.style.fontSize = size + 'px'; w.style.fontSize = Math.round(size * 0.74) + 'px'; };
-    apply();
-    while (size > 26 && content.scrollHeight > card.clientHeight - 80) { size -= 2; apply(); }
+    confetti(seed || 7);
+    let size = 64;
+    el.style.fontSize = size + 'px';
+    while (size > 30 && el.scrollHeight > card.clientHeight - 96) { size -= 2; el.style.fontSize = size + 'px'; }
     return size;
   };
 </script>
