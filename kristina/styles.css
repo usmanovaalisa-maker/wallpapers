@@ -180,16 +180,18 @@ img { max-width: 100%; }
   .gnav { display: grid; }
 }
 
+/* Счётчик — под картинкой, в одной строке с точками: на самих слайдах
+   уже нарисован свой номер, перекрывать их не нужно. */
 .counter {
   position: absolute;
-  right: 12px;
-  bottom: 56px;
+  right: 4px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  height: 32px;
   margin: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(27, 19, 48, .58);
-  color: #fff;
   font-size: 12px;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
   pointer-events: none;
