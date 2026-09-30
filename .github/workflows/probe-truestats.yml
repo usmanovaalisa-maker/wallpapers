@@ -1,0 +1,58 @@
+name: Разведка API TrueStats (временно)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      TRUE_STATS: ${{ secrets.TRUE_STATS }}
+    steps:
+      - name: Фильтр по группе артикулов (в лог — только названия групп и структура, без сумм)
+        shell: python
+        run: |
+          import re, os, json, html, urllib.request, datetime as dt
+          key = os.environ["TRUE_STATS"].strip()
+          def req(u, body=None, auth=True):
+              h = {"User-Agent": "Mozilla/5.0", "Accept": "application/json", "Content-Type": "application/json"}
+              if auth: h["X-Api-Token"] = key
+              r = urllib.request.Request(u, headers=h, data=json.dumps(body).encode() if body is not None else None)
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as resp:
+                      return resp.status, resp.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode("utf-8", "replace")[:600]
+          st, b = req("https://api.truestats.ru/api/public/doc", auth=False)
+          spec = json.loads(html.unescape(re.search(r'id="swagger-data"[^>]*>(.*?)</script>', b, re.S).group(1)))
+          spec = spec.get("spec", spec); schemas = spec["components"]["schemas"]
+          def resolve(x, depth=0):
+              if depth > 8: return "…"
+              if isinstance(x, dict):
+                  if "$ref" in x: return resolve(schemas.get(x["$ref"].split("/")[-1], {}), depth + 1)
+                  return {k: resolve(v, depth + 1) for k, v in x.items()}
+              if isinstance(x, list): return [resolve(i, depth + 1) for i in x]
+              return x
+          for path in ["/reporting/aggregated-view/day", "/reporting/facets"]:
+              op = spec["paths"][path]["post"]
+              print(f"\n=== {path}\nREQUEST:", json.dumps(resolve(op.get("requestBody", {})), ensure_ascii=False)[:5000])
+              if path == "/reporting/facets":
+                  print("RESPONSE:", json.dumps(resolve(op.get("responses", {}).get("200", {})), ensure_ascii=False)[:3000])
+
+          y = dt.date.today() - dt.timedelta(days=1)
+          period = {"dateFrom": (y - dt.timedelta(days=30)).isoformat(), "dateTo": y.isoformat()}
+          for body in ({**period, "_dimensions": ["groups"]}, {**period}, {"_dimensions": ["groups"]}):
+              st, r = req("https://api.truestats.ru/reporting/facets", body)
+              print(f"\nFACETS body-keys={list(body)} -> {st}")
+              if st != 200: print("  ", r[:400]); continue
+              d = json.loads(r)
+              print("  top keys:", list(d) if isinstance(d, dict) else type(d).__name__)
+              txt = json.dumps(d, ensure_ascii=False)
+              for m in re.finditer(r'\{[^{}]*НГ[^{}]*\}', txt):
+                  print("  NG:", m.group(0)[:300])
+              g = d.get("groups") if isinstance(d, dict) else None
+              if g is None and isinstance(d, dict):
+                  for k, v in d.items():
+                      if "group" in k.lower(): g = v; print("  groups key:", k)
+              print("  groups sample:", json.dumps(g, ensure_ascii=False)[:1500] if g is not None else "нет")
+              break
