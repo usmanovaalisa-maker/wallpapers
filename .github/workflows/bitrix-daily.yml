@@ -2,7 +2,7 @@ name: Напутствие дня в Битрикс24
 
 on:
   schedule:
-    # 04:47 UTC = 08:47 по GMT+4; GitHub иногда запускает с опозданием на несколько минут
+    # 04:47 UTC = 08:47 по GMT+4; GitHub может запускать с большим опозданием (бывает на часы)
     - cron: "47 4 * * *"
   workflow_dispatch:
     inputs:
@@ -33,13 +33,26 @@ jobs:
       RESULTS_SHEET_CSV_URL: ${{ secrets.RESULTS_SHEET_CSV_URL }}
     steps:
       - uses: actions/checkout@v5
+
+      # Если напутствие на сегодня уже отправили вручную, запоздавший плановый запуск ничего не делает.
+      # Признак отправки — сохранённая картинка дня cards/ДАТА.jpg (её коммитит только настоящая отправка).
+      - name: Уже отправляли сегодня?
+        id: check
+        if: github.event_name == 'schedule'
+        run: |
+          d=$(TZ="${WISH_TZ:-Europe/Samara}" date +%F)
+          if [ -f "cards/$d.jpg" ]; then echo "Напутствие на $d уже отправлено — пропускаем."; echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+
       - uses: actions/setup-python@v6
+        if: steps.check.outputs.skip != 'true'
         with:
           python-version: "3.12"
       - run: pip install playwright
+        if: steps.check.outputs.skip != 'true'
 
       - name: Рисуем картинку дня
         id: card
+        if: steps.check.outputs.skip != 'true'
         run: python scripts/send_bitrix.py
         env:
           CARD: "1"
@@ -64,6 +77,7 @@ jobs:
           echo "url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$(git rev-parse HEAD)/${{ steps.card.outputs.card }}" >> "$GITHUB_OUTPUT"
 
       - name: Отправляем в Битрикс24
+        if: steps.check.outputs.skip != 'true'
         run: python scripts/send_bitrix.py
         env:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
