@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Кристина — Специалист по карточкам WB · Premium</title>
+<meta name="description" content="Шуточная карточка товара для поздравления Кристины с днём рождения." />
+<meta name="theme-color" content="#f6f2fc" />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <span class="topbar__crumb">Каталог · Коллеги · Премиум-сегмент</span>
+  </header>
+
+  <main>
+
+    <!-- ── 1. Галерея ─────────────────────────────────────────── -->
+    <section class="gallery" aria-roledescription="карусель" aria-label="Фотографии товара">
+      <div class="gallery__viewport" id="track" tabindex="0" aria-label="Слайды, листайте свайпом или стрелками">
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/01.jpg">
+            <img class="frame__img" data-src="assets/slides/01.jpg|assets/slides/01.png"
+                 alt="Слайд 1 из 6: главное фото карточки — Кристина, специалист по карточкам WB."
+                 width="900" height="1200" fetchpriority="high" decoding="async" />
+          </div>
+        </figure>
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/02.jpg">
+            <img class="frame__img" data-src="assets/slides/02.jpg|assets/slides/02.png"
+                 alt="Слайд 2 из 6: описание товара «Кристина»."
+                 width="900" height="1200" decoding="async" />
+          </div>
+        </figure>
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/03.jpg">
+            <img class="frame__img" data-src="assets/slides/03.jpg|assets/slides/03.png"
+                 alt="Слайд 3 из 6: характеристики — «Особенности: любит спорт», «Совместимость: с 9:00 до 17:00»."
+                 width="900" height="1200" decoding="async" />
+          </div>
+        </figure>
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/04.jpg">
+            <img class="frame__img" data-src="assets/slides/04.jpg|assets/slides/04.png"
+                 alt="Слайд 4 из 6: комплектация — велосипед и полезные советы."
+                 width="900" height="1200" decoding="async" />
+          </div>
+        </figure>
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/05.jpg">
+            <img class="frame__img" data-src="assets/slides/05.jpg|assets/slides/05.png"
+                 alt="Слайд 5 из 6: «СОВМЕСТНОГО ОТПУСКА»."
+                 width="900" height="1200" decoding="async" />
+          </div>
+        </figure>
+
+        <figure class="slide">
+          <div class="frame" data-frame data-note="assets/slides/06.jpg">
+            <img class="frame__img" data-src="assets/slides/06.jpg|assets/slides/06.png"
+                 alt="Слайд 6 из 6: завершающий слайд галереи."
+                 width="900" height="1200" decoding="async" />
+          </div>
+        </figure>
+
+      </div>
+
+      <button class="gnav gnav--prev" id="prev" type="button" aria-label="Предыдущий слайд">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+      </button>
+      <button class="gnav gnav--next" id="next" type="button" aria-label="Следующий слайд">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+      </button>
+
+      <p class="counter" id="counter" aria-live="polite">1 / 6</p>
+      <div class="dots" id="dots" role="tablist" aria-label="Выбор слайда"></div>
+    </section>
+
+    <!-- ── 2. Карточка товара ─────────────────────────────────── -->
+    <section class="panel product">
+      <h1 class="product__title">Кристина</h1>
+      <p class="product__sub">Специалист по карточкам WB · Premium</p>
+
+      <p class="rating">
+        <span class="rating__stars" aria-hidden="true">
+          <svg viewBox="0 0 20 20"><path d="M10 1.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L1.6 7.7l5.8-.8z"/></svg>
+        </span>
+        <b class="rating__value">5,0</b>
+        <span class="rating__meta">оценка команды</span>
+      </p>
+
+      <dl class="specs">
+        <div class="specs__row"><dt>Артикул</dt><dd>KRISTINA-2026</dd></div>
+        <div class="specs__row"><dt>Цена</dt><dd class="price">БЕСЦЕННА</dd></div>
+        <div class="specs__row"><dt>Остаток</dt><dd class="stock">1 шт.</dd></div>
+      </dl>
+
+      <button class="btn btn--soft" id="toCart" type="button">Добавить в корзину</button>
+    </section>
+
+    <!-- ── 3a. О товаре ───────────────────────────────────────── -->
+    <section class="panel">
+      <h2 class="h2">О товаре</h2>
+      <p class="text">
+        Редкая позиция ручной сборки: держит карточки в порядке, дедлайны — под контролем,
+        а настроение команды — в плюсе. Работает без перегрева, обновления ставит сама.
+      </p>
+      <p class="text text--dim">
+        Официально доступна с 9:00 до 17:00. В остальное время — спорт, велосипед и отпуск.
+      </p>
+    </section>
+
+    <!-- ── 3b. С этим товаром покупают ────────────────────────── -->
+    <section class="panel">
+      <h2 class="h2">С этим товаром покупают</h2>
+      <ul class="bundle">
+        <li class="bundle__item">
+          <span class="bundle__ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 20h16v-6a4 4 0 00-4-4H8a4 4 0 00-4 4v6zM12 6V4M8 20v-4M16 20v-4"/></svg>
+          </span>
+          <span class="bundle__name">Торт</span>
+          <span class="bundle__price">1 шт.</span>
+        </li>
+        <li class="bundle__item">
+          <span class="bundle__ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 9h16v11H4zM4 9l2-4h12l2 4M12 5v15"/></svg>
+          </span>
+          <span class="bundle__name">Подарок</span>
+          <span class="bundle__price">в пути</span>
+        </li>
+        <li class="bundle__item">
+          <span class="bundle__ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 20h18M9 20V9h6v11M6 9l6-5 6 5M11 13h2"/></svg>
+          </span>
+          <span class="bundle__name">Отпуск</span>
+          <span class="bundle__price">2 места</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ── 3c. Отзывы ─────────────────────────────────────────── -->
+    <section class="panel">
+      <h2 class="h2">Отзывы</h2>
+      <p class="note">Отзывы ниже — часть поздравления. Это шутка коллег, а не реальные отзывы покупателей.</p>
+      <div class="frame frame--block" data-frame data-note="assets/blocks/07-reviews.jpg">
+        <img class="frame__img" data-src="assets/blocks/07-reviews.jpg|assets/blocks/07-reviews.png"
+             alt="Блок с шуточными отзывами коллег о Кристине — часть поздравления, а не реальные отзывы покупателей."
+             width="900" height="1200" loading="lazy" decoding="async" />
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    Шуточная страница-поздравление. Не связана с Wildberries и не является магазином.
+  </footer>
+</div>
+
+<!-- ── 4. Нижняя панель с главной кнопкой ───────────────────── -->
+<div class="bar">
+  <div class="bar__inner">
+    <p class="bar__status" id="status" aria-live="polite"></p>
+    <button class="btn btn--main" id="order" type="button">Оформить заказ</button>
+  </div>
+</div>
+
+<!-- Тост -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Финальный экран -->
+<div class="finale" id="finale" role="dialog" aria-modal="true" aria-label="Поздравление" hidden>
+  <div class="finale__box" id="finaleBox">
+    <div class="frame frame--finale" data-frame data-note="assets/blocks/08-finale.jpg">
+      <img class="frame__img" data-src="assets/blocks/08-finale.jpg|assets/blocks/08-finale.png"
+           alt="Финальный экран с поздравлением Кристины с днём рождения."
+           width="900" height="1200" decoding="async" />
+      <button class="finale__close" id="finaleClose" type="button" aria-label="Закрыть поздравление">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <button class="btn btn--main btn--gift" id="gift" type="button">Получить подарок</button>
+  </div>
+</div>
+
+<script src="app.js" defer></script>
+</body>
+</html>
