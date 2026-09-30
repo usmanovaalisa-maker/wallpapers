@@ -82,6 +82,6 @@ jobs:
         env:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
           BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
-          BITRIX_CHAT_NAME: ${{ vars.BITRIX_CHAT_NAME || 'Доброплан 2026' }}
+          BITRIX_CHAT_NAME: ${{ vars.BITRIX_CHAT_NAME || 'Доброплан 2026 _ Чат руководителей' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           CARD_URL: ${{ steps.save.outputs.url }}
