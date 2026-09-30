@@ -22,14 +22,14 @@ def date_label(date):
     return f"{WEEKDAYS[d.weekday()]}, {d.day} {MONTHS[d.month - 1]}"
 
 
-def make_card(date, text):
-    out = ROOT / "cards" / f"{date}.jpg"
+def make_card(date, text, template="template.html", prefix=""):
+    out = ROOT / "cards" / f"{prefix}{date}.jpg"
     out.parent.mkdir(exist_ok=True)
     with sync_playwright() as p:
         path = os.environ.get("CHROME_PATH")
         browser = p.chromium.launch(executable_path=path) if path else p.chromium.launch(channel="chrome")
         page = browser.new_page(viewport={"width": 1080, "height": 1080})
-        page.goto((ROOT / "scripts" / "card" / "template.html").as_uri())
+        page.goto((ROOT / "scripts" / "card" / template).as_uri())
         page.evaluate("document.fonts.ready")
         seed = dt.date.fromisoformat(date).toordinal() % 233280  # конфетти каждый день раскладывается по-новому
         page.evaluate("([t, d, s]) => fill(t, d, s)", [text, date_label(date), seed])

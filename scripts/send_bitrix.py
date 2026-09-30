@@ -18,6 +18,8 @@ daily[дата] может быть объектом с вариантами п�
   DRY_RUN=1           только показать текст, не отправлять
   CARD=1              нарисовать картинку cards/ДАТА.jpg и выйти (шаг до отправки)
   CARD_URL            публичная ссылка на картинку — прикладывается к сообщению в чат
+  WISHES_FILE, CARD_TEMPLATE, CARD_PREFIX, MESSAGE_TITLE — для отдельной рассылки (например, новогодней):
+                      файл текстов, шаблон картинки, префикс имени картинки и заголовок сообщения
   WB_API_TOKEN, OZON_CLIENT_ID, OZON_API_KEY, RESULTS_SHEET_CSV_URL — источники итогов дня
                       (см. scripts/day_results.py); без них напутствие уходит без цифр
 """
@@ -37,7 +39,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def team_data():
-    return json.loads((ROOT / "wishes" / "team.json").read_text(encoding="utf-8"))
+    # WISHES_FILE — файл с текстами рассылки (по умолчанию напутствие команде wishes/team.json)
+    return json.loads((ROOT / (os.environ.get("WISHES_FILE") or "wishes/team.json")).read_text(encoding="utf-8"))
+
+
+def work_calendar():
+    """Рабочие дни всегда по календарю напутствия команде (wishes/team.json)."""
+    return json.loads((ROOT / "wishes" / "team.json").read_text(encoding="utf-8")).get("calendar", {})
 
 
 def todays_text(date, level="support", data=None):
@@ -47,7 +55,13 @@ def todays_text(date, level="support", data=None):
         daily = daily[0] if daily else None
     if isinstance(daily, dict):
         daily = next((daily[k] for k in (level, "support", "steady", "up") if daily.get(k)), None)
-    return daily or data.get("calendar", {}).get(date)
+    if daily or data.get("calendar", {}).get(date):
+        return daily or data["calendar"][date]
+    # запасные тексты рассылки без календаря (например, новогодней) — только в рабочие дни
+    options = (data.get("fallback") or {}).get(level) or (data.get("fallback") or {}).get("support") or []
+    if options and date in work_calendar():
+        return options[dt.date.fromisoformat(date).toordinal() % len(options)]
+    return None
 
 
 def results_reaction(date, level, data):
@@ -64,11 +78,11 @@ def day_results(date, data):
     """Итоги прошедшего дня: считаем один раз за запуск (у WB лимит — 1 запрос в минуту)
     и держим во временной папке раннера, вне репозитория."""
     import day_results as dr
-    cache = pathlib.Path(os.environ.get("RUNNER_TEMP") or "/tmp") / f"day_results_{date}.json"
+    cache = pathlib.Path(os.environ.get("RUNNER_TEMP") or "/tmp") / f"day_results_{os.environ.get('CARD_PREFIX', '')}{date}.json"
     if cache.exists():
         r = json.loads(cache.read_text(encoding="utf-8"))
     else:
-        r = dr.collect(dt.date.fromisoformat(date), data.get("calendar", {}))
+        r = dr.collect(dt.date.fromisoformat(date), work_calendar())
         cache.write_text(json.dumps(r, ensure_ascii=False), encoding="utf-8")
         print(f"Итоги {r['start']}…{r['end']}: уровень {r['level']}, источники: {', '.join(r['sources']) or 'нет'}"
               + (f", ошибки: {'; '.join(r['errors'])}" if r["errors"] else ""))
@@ -150,14 +164,15 @@ def main():
 
     if os.environ.get("CARD") == "1":
         from make_card import make_card
-        card = make_card(date, reaction or text)
+        card = make_card(date, reaction or text, os.environ.get("CARD_TEMPLATE") or "template.html",
+                         os.environ.get("CARD_PREFIX", ""))
         print(f"Картинка: {card}")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 f.write(f"card=cards/{card.name}\n")
         return
 
-    title = "☕ Напутствие дня от «Дари Сейчас»"
+    title = os.environ.get("MESSAGE_TITLE") or "☕ Напутствие дня от «Дари Сейчас»"
     print(f"{date}: {text}" + ("\n(+ строка с итогами дня — в лог не выводится)" if stats else ""))
     if stats:
         text = f"{text}\n\n{stats}"
@@ -180,7 +195,7 @@ def main():
         return
 
     card_url = os.environ.get("CARD_URL", "").strip()
-    card_file = ROOT / "cards" / f"{date}.jpg"
+    card_file = ROOT / "cards" / f"{os.environ.get('CARD_PREFIX', '')}{date}.jpg"
     if dialog:
         payload = {"MESSAGE": f"[B]{title}[/B]\n\n{text}"}
         if card_url:

@@ -1,0 +1,78 @@
+name: Новогодний сезон в Битрикс24 (чат «НГ 2026-2027»)
+
+# Пока только ручной запуск для проверки. Когда проверим — добавим расписание, как у bitrix-daily.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Дата ГГГГ-ММ-ДД (пусто — сегодня)"
+        required: false
+      dry_run:
+        description: "Только показать текст и картинку, не отправлять"
+        type: boolean
+        default: false
+      to_me:
+        description: "Тест: отправить мне (BITRIX_DIALOG_ID), а не в чат «НГ 2026-2027»"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # чтобы сохранить картинку дня в папку cards/ и получить на неё ссылку
+
+concurrency: bitrix-ng
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      WISH_TZ: ${{ vars.WISH_TZ }}
+      WISH_DATE: ${{ inputs.date }}
+      WISHES_FILE: wishes/ng.json
+      CARD_TEMPLATE: template_ng.html
+      CARD_PREFIX: ng-
+      MESSAGE_TITLE: "🎄 Новогодний сезон: итоги дня"
+      # Итоги только по группе артикулов TrueStats; цифры не пишутся ни в лог, ни в репозиторий
+      TRUE_STATS: ${{ secrets.TRUE_STATS }}
+      TRUESTATS_GROUP: ${{ vars.NG_TRUESTATS_GROUP || 'НГ27_ВБ' }}
+      SEASON_START: ${{ vars.NG_SEASON_START || '2026-09-01' }}
+      STATS_LABEL: "по НГ-коллекции"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install playwright
+
+      - name: Рисуем картинку дня
+        id: card
+        run: python scripts/send_bitrix.py
+        env:
+          CARD: "1"
+
+      - name: Показываем картинку (проверка без отправки)
+        if: inputs.dry_run && steps.card.outputs.card
+        uses: actions/upload-artifact@v4
+        with:
+          name: card
+          path: ${{ steps.card.outputs.card }}
+
+      - name: Сохраняем картинку, чтобы у неё была ссылка
+        id: save
+        if: ${{ !inputs.dry_run && steps.card.outputs.card }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ steps.card.outputs.card }}"
+          git diff --cached --quiet || git commit -m "Картинка НГ-сезона: ${{ steps.card.outputs.card }}"
+          git pull --rebase -q origin "${GITHUB_REF_NAME}"
+          git push -q origin "HEAD:${GITHUB_REF_NAME}"
+          echo "url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$(git rev-parse HEAD)/${{ steps.card.outputs.card }}" >> "$GITHUB_OUTPUT"
+
+      - name: Отправляем в Битрикс24
+        run: python scripts/send_bitrix.py
+        env:
+          BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
+          BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
+          BITRIX_CHAT_NAME: ${{ (github.event_name == 'workflow_dispatch' && inputs.to_me) && '' || (vars.NG_CHAT_NAME || 'НГ 2026-2027') }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          CARD_URL: ${{ steps.save.outputs.url }}

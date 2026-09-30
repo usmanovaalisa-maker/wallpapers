@@ -6,6 +6,10 @@
 Переменные окружения (любой источник можно не задавать):
   TRUE_STATS            API-токен TrueStats. Если он работает, заказы, их сумма и прибыль по всем
                         магазинам берутся отсюда, а Wildberries и Ozon напрямую не опрашиваются
+  TRUESTATS_GROUP       группа артикулов TrueStats (название, например «НГ27_ВБ», или ID) — итоги только
+                        по ней; тогда Wildberries, Ozon и таблица не используются
+  SEASON_START          начало сезона ГГГГ-ММ-ДД — добавляет итоги с начала сезона
+  STATS_LABEL           подпись в строке итогов, например «по НГ-коллекции»
   WB_API_TOKEN          токен API Wildberries (категория «Статистика», только чтение)
   OZON_CLIENT_ID        Client-Id продавца Ozon
   OZON_API_KEY          API-ключ Ozon (роль с доступом к аналитике)
@@ -99,14 +103,33 @@ def ozon(start, end):
     return days
 
 
+def _ts(path, body):
+    headers = {"X-Api-Token": os.environ["TRUE_STATS"].strip(), "Content-Type": "application/json", "Accept": "application/json"}
+    return json.loads(_get("https://api.truestats.ru" + path, headers, json.dumps(body).encode()))
+
+
+def truestats_group_id(group):
+    """ID группы артикулов по названию (или сам ID, если передано число)."""
+    if str(group).isdigit():
+        return int(group)
+    facets = _ts("/reporting/facets", {"_dimensions": ["groups"]})
+    want = " ".join(str(group).lower().split())
+    for g in facets.get("groups", []):
+        if " ".join(str(g.get("name", "")).lower().split()) == want:
+            return int(g["id"])
+    raise LookupError(f"группа «{group}» не найдена в TrueStats")
+
+
 def truestats(start, end):
-    """Заказы, сумма заказов и прибыль по дням из TrueStats (все подключённые магазины)."""
+    """Заказы, сумма заказов и прибыль по дням из TrueStats (все магазины или одна группа артикулов)."""
     key = os.environ.get("TRUE_STATS", "").strip()
     if not key:
         return None, {}
-    res = json.loads(_get("https://api.truestats.ru/reporting/aggregated-view/day",
-                          {"X-Api-Token": key, "Content-Type": "application/json", "Accept": "application/json"},
-                          json.dumps({"dateFrom": start.isoformat(), "dateTo": end.isoformat()}).encode()))
+    body = {"dateFrom": start.isoformat(), "dateTo": end.isoformat()}
+    group = os.environ.get("TRUESTATS_GROUP", "").strip()
+    if group:
+        body["filters"] = {"group": [truestats_group_id(group)]}
+    res = _ts("/reporting/aggregated-view/day", body)
     days, profit = {}, {}
     for r in res.get("result", []):
         d = _date(r.get("date"))
@@ -157,9 +180,14 @@ def collect(today, calendar):
     total, sources, errors = {}, [], []
     wins, profit = {}, {}
     use_ts = False
+    only_group = bool(os.environ.get("TRUESTATS_GROUP", "").strip())
+    season = os.environ.get("SEASON_START", "").strip()
+    season_start = dt.date.fromisoformat(season) if season else None
+    if season_start and season_start < first:
+        first = season_start  # история нужна с начала сезона — для итогов сезона
     for name, fn in (("TrueStats", truestats), ("Wildberries", wildberries), ("Ozon", ozon), ("таблица", sheet)):
-        if use_ts and name in ("Wildberries", "Ozon"):
-            continue  # TrueStats уже включает эти магазины — не считаем заказы дважды
+        if (use_ts and name in ("Wildberries", "Ozon")) or (only_group and name != "TrueStats"):
+            continue  # TrueStats уже включает эти магазины; для группы артикулов другие источники не подходят
         try:
             got = fn(first, end)
             if name == "TrueStats":
@@ -185,7 +213,8 @@ def collect(today, calendar):
     orders, revenue = summ(start)
     period_profit = [profit[d] for d in window(start) if d in profit]
     prev_orders, _ = summ(start - dt.timedelta(days=length))
-    past = [summ(first + dt.timedelta(days=i))[0] for i in range((start - first).days - length + 1)]
+    hist = max(first, end - dt.timedelta(days=HISTORY_DAYS))
+    past = [summ(hist + dt.timedelta(days=i))[0] for i in range((start - hist).days - length + 1)]
     past = [p for p in past if p]
 
     if not sources or orders == 0:
@@ -198,7 +227,12 @@ def collect(today, calendar):
         level = "steady"
     else:
         level = "support"
+    season_days = [d for d in total if season_start and season_start <= d <= end]
+    in_season = bool(season_start) and (end - season_start).days < HISTORY_DAYS
     return {"level": level, "start": start.isoformat(), "end": end.isoformat(), "days": length,
+            "season_orders": sum(total[d][0] for d in season_days) if season_start else None,
+            "season_revenue": round(sum(total[d][1] for d in season_days)) if season_start else None,
+            "record_label": "лучший результат сезона" if in_season else "лучший результат за месяц",
             "orders": orders, "revenue": round(revenue),
             "profit": round(sum(period_profit)) if period_profit else None, "prev_orders": prev_orders,
             "wins": [wins[d] for d in sorted(wins) if start <= d <= end],
@@ -220,18 +254,23 @@ def stats_line(r):
         when = "вчера" if r["days"] == 1 else f"с {dm(r['start'])} по {dm(r['end'])}"
         o = r["orders"]
         num = lambda n: f"{n:,}".replace(",", "\u00a0")
-        s = f"Итоги {when}: {num(o)} {_plural(o, 'заказ', 'заказа', 'заказов')}"
+        label = os.environ.get("STATS_LABEL", "").strip()
+        s = f"Итоги {label + ' ' if label else ''}{when}: {num(o)} {_plural(o, 'заказ', 'заказа', 'заказов')}"
         if r["revenue"]:
             s += f" на {num(r['revenue'])} ₽"
         if r.get("profit"):
             s += f", {num(r['profit'])} ₽ прибыли"
         if r["level"] == "record":
-            s += " — лучший результат за месяц!"
+            s += f" — {r.get('record_label') or 'лучший результат за месяц'}!"
         elif r["level"] == "up" and r["prev_orders"]:
             pct = round((o / r["prev_orders"] - 1) * 100)
             if pct >= 1:
                 s += f" — на {pct}% больше, чем " + ("днём раньше" if r["days"] == 1 else "за такой же период перед этим")
         lines.append(s + ("." if not s.endswith("!") else ""))
+        if r.get("season_orders"):
+            so = r["season_orders"]
+            lines.append(f"С начала сезона: {num(so)} {_plural(so, 'заказ', 'заказа', 'заказов')}"
+                         + (f" на {num(r['season_revenue'])} ₽." if r.get("season_revenue") else "."))
     for w in r["wins"]:
         lines.append(f"Победа дня: {w}")
     return "\n".join(lines)
