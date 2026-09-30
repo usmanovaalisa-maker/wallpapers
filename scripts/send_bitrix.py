@@ -103,14 +103,28 @@ def call(webhook, method, payload, fail=True):
 
 
 def find_chat(webhook, name):
-    """ID группового чата по названию (без учёта регистра) → "chat123" или None."""
-    want = " ".join(name.lower().split())
-    found = call(webhook, "im.search.chat.list", {"FIND": name}, fail=False).get("result") or []
-    if not found:
-        found = [i.get("chat") or i for i in (call(webhook, "im.recent.list", {}, fail=False).get("result") or {}).get("items", [])]
-    for c in found:
-        if " ".join(str(c.get("title") or c.get("name") or "").lower().split()) == want and c.get("id"):
-            return f"chat{c['id']}"
+    """ID группового чата по названию (без учёта регистра и лишних пробелов) → "chat123" или None."""
+    norm = lambda t: " ".join(str(t or "").lower().replace("ё", "е").split())
+    want = norm(name)
+    candidates = []
+    for method, payload in (("im.search.chat.list", {"FIND": name}), ("im.search.chat.list", {"FIND": name.split()[0]}),
+                            ("im.recent.list", {"SKIP_OPENLINES": "Y"}), ("im.recent.get", {})):
+        body = call(webhook, method, payload, fail=False)
+        if "error" in body:
+            print(f"  {method}: {body.get('error')} {body.get('error_description', '')}")
+            continue
+        res = body.get("result") or []
+        items = res.get("items", []) if isinstance(res, dict) else res
+        for i in items:
+            c = i.get("chat") if isinstance(i.get("chat"), dict) else i
+            title = c.get("name") or c.get("title") or i.get("title")
+            cid = c.get("id") or (str(i.get("id", "")).removeprefix("chat") if str(i.get("id", "")).startswith("chat") else None)
+            if title and cid:
+                candidates.append((title, cid))
+                if norm(title) == want:
+                    return f"chat{cid}"
+    similar = sorted({t for t, _ in candidates if norm(name.split()[0])[:5] in norm(t)})
+    print(f"  чатов в выдаче: {len(candidates)}; похожие названия: {similar or 'нет'}")
     return None
 
 
