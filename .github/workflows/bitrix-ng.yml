@@ -1,7 +1,9 @@
 name: Новогодний сезон в Битрикс24 (чат «НГ 2026-2027»)
 
-# Пока только ручной запуск для проверки. Когда проверим — добавим расписание, как у bitrix-daily.yml.
 on:
+  schedule:
+    # 06:00 UTC = 10:00 по Самаре; дубль запуска делает ежедневное задание Claude (GitHub опаздывает)
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -38,13 +40,26 @@ jobs:
       STATS_LABEL: "по НГ-коллекции"
     steps:
       - uses: actions/checkout@v5
+
+      # Если сегодня уже отправили, запоздавший плановый запуск ничего не делает
+      # (признак — сохранённая картинка cards/ng-ДАТА.jpg, её коммитит только настоящая отправка)
+      - name: Уже отправляли сегодня?
+        id: check
+        if: github.event_name == 'schedule'
+        run: |
+          d=$(TZ="${WISH_TZ:-Europe/Samara}" date +%F)
+          if [ -f "cards/ng-$d.jpg" ]; then echo "Уже отправлено за $d — пропускаем."; echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+
       - uses: actions/setup-python@v6
+        if: steps.check.outputs.skip != 'true'
         with:
           python-version: "3.12"
       - run: pip install playwright
+        if: steps.check.outputs.skip != 'true'
 
       - name: Рисуем картинку дня
         id: card
+        if: steps.check.outputs.skip != 'true'
         run: python scripts/send_bitrix.py
         env:
           CARD: "1"
@@ -69,6 +84,7 @@ jobs:
           echo "url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$(git rev-parse HEAD)/${{ steps.card.outputs.card }}" >> "$GITHUB_OUTPUT"
 
       - name: Отправляем в Битрикс24
+        if: steps.check.outputs.skip != 'true'
         run: python scripts/send_bitrix.py
         env:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
