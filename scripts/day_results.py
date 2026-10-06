@@ -1,21 +1,18 @@
-"""Итоги прошедшего дня для напутствия команде: TrueStats, Wildberries, Ozon и Google-таблица.
+"""Итоги прошедшего дня для рассылок в Битрикс24 — только из TrueStats.
 
 Репозиторий публичный, поэтому цифры никуда не сохраняются и не печатаются в лог —
 они попадают только в сообщение в Битрикс24.
 
-Переменные окружения (любой источник можно не задавать):
-  TRUE_STATS            API-токен TrueStats. Если он работает, заказы, их сумма и прибыль по всем
-                        магазинам берутся отсюда, а Wildberries и Ozon напрямую не опрашиваются
-  TRUESTATS_GROUP       группа артикулов TrueStats (название, например «НГ27_ВБ», или ID) — итоги только
-                        по ней; тогда Wildberries, Ozon и таблица не используются
+Источник один: TrueStats, метод «Агрегированный вид по дням» (как вкладка «По дням» в оцифровке):
+заказы (ordersCount), сумма заказов (orders) и прибыль (profit) по дням.
+
+Переменные окружения:
+  TRUE_STATS            API-токен TrueStats (обязателен; без него напутствие уходит без цифр)
+  TRUESTATS_ACCOUNTS    магазины TrueStats через запятую (названия или ID), например
+                        «Дари Радость, Дари сейчас» — итоги только по ним
+  TRUESTATS_GROUP       группа артикулов TrueStats (название, например «НГ27_ВБ», или ID) — итоги только по ней
   SEASON_START          начало сезона ГГГГ-ММ-ДД — добавляет итоги с начала сезона
   STATS_LABEL           подпись в строке итогов, например «по НГ-коллекции»
-  WB_API_TOKEN          токен API Wildberries (категория «Статистика», только чтение)
-  OZON_CLIENT_ID        Client-Id продавца Ozon
-  OZON_API_KEY          API-ключ Ozon (роль с доступом к аналитике)
-  RESULTS_SHEET_CSV_URL ссылка на Google-таблицу, опубликованную как CSV.
-                        Колонки: Дата | Заказы | Выручка | Прибыль | Победа дня (любые, кроме даты,
-                        можно не заполнять). Прибыль берётся только отсюда — например, из TrueStats
 
 Период — с прошлого рабочего дня по calendar до вчера включительно
 (в понедельник это пятница–воскресенье). Уровень:
@@ -24,9 +21,7 @@
   steady  — примерно так же (спад не больше 10%)
   support — спад больше 10% или данных нет: напутствие без цифр
 """
-import csv
 import datetime as dt
-import io
 import json
 import os
 import re
@@ -67,42 +62,6 @@ def _date(s):
     return None
 
 
-def wildberries(start, end):
-    token = os.environ.get("WB_API_TOKEN", "").strip()
-    if not token:
-        return None
-    # flag=0 — все заказы, изменённые с dateFrom; группируем по дате заказа
-    rows = json.loads(_get(
-        f"https://statistics-api.wildberries.ru/api/v1/supplier/orders?dateFrom={start}&flag=0",
-        {"Authorization": token},
-    ))
-    days = {}
-    for r in rows:
-        d = _date(r.get("date"))
-        if d and start <= d <= end:
-            o, v = days.get(d, (0, 0.0))
-            days[d] = (o + 1, v + _num(r.get("priceWithDisc")))
-    return days
-
-
-def ozon(start, end):
-    cid, key = os.environ.get("OZON_CLIENT_ID", "").strip(), os.environ.get("OZON_API_KEY", "").strip()
-    if not (cid and key):
-        return None
-    end = min(end, dt.date.today())  # будущие даты Ozon отклоняет с ошибкой 400
-    body = {"date_from": start.isoformat(), "date_to": end.isoformat(),
-            "metrics": ["ordered_units", "revenue"], "dimension": ["day"], "limit": 1000, "offset": 0}
-    res = json.loads(_get("https://api-seller.ozon.ru/v1/analytics/data",
-                          {"Client-Id": cid, "Api-Key": key, "Content-Type": "application/json"},
-                          json.dumps(body).encode()))
-    days = {}
-    for r in res.get("result", {}).get("data", []):
-        d = _date(r["dimensions"][0]["id"])
-        if d:
-            days[d] = (int(r["metrics"][0]), float(r["metrics"][1]))
-    return days
-
-
 def _ts(path, body):
     headers = {"X-Api-Token": os.environ["TRUE_STATS"].strip(), "Content-Type": "application/json", "Accept": "application/json"}
     return json.loads(_get("https://api.truestats.ru" + path, headers, json.dumps(body).encode()))
@@ -120,15 +79,38 @@ def truestats_group_id(group):
     raise LookupError(f"группа «{group}» не найдена в TrueStats")
 
 
+def truestats_account_ids(names):
+    """ID магазинов TrueStats по названиям (или сами ID)."""
+    wanted = [n.strip() for n in names.split(",") if n.strip()]
+    facets = _ts("/reporting/facets", {"_dimensions": ["accounts"]})
+    norm = lambda t: " ".join(str(t).lower().replace("ё", "е").split())
+    by_name = {norm(a.get("name", "")): int(a["id"]) for a in facets.get("accounts", [])}
+    ids = []
+    for n in wanted:
+        if n.isdigit():
+            ids.append(int(n))
+        elif norm(n) in by_name:
+            ids.append(by_name[norm(n)])
+        else:
+            raise LookupError(f"магазин «{n}» не найден в TrueStats")
+    return ids
+
+
 def truestats(start, end):
-    """Заказы, сумма заказов и прибыль по дням из TrueStats (все магазины или одна группа артикулов)."""
+    """Заказы, сумма заказов и прибыль по дням из TrueStats (с фильтром по магазинам и/или группе артикулов)."""
     key = os.environ.get("TRUE_STATS", "").strip()
     if not key:
         return None, {}
     body = {"dateFrom": start.isoformat(), "dateTo": end.isoformat()}
     group = os.environ.get("TRUESTATS_GROUP", "").strip()
+    filters = {}
     if group:
-        body["filters"] = {"group": [truestats_group_id(group)]}
+        filters["group"] = [truestats_group_id(group)]
+    accounts = os.environ.get("TRUESTATS_ACCOUNTS", "").strip()
+    if accounts:
+        filters["accounts"] = truestats_account_ids(accounts)
+    if filters:
+        body["filters"] = filters
     res = _ts("/reporting/aggregated-view/day", body)
     days, profit = {}, {}
     for r in res.get("result", []):
@@ -138,32 +120,6 @@ def truestats(start, end):
             if r.get("profit") is not None:
                 profit[d] = _num(r.get("profit"))
     return days, profit
-
-
-def sheet(start, end):
-    url = os.environ.get("RESULTS_SHEET_CSV_URL", "").strip()
-    if not url:
-        return None, {}, {}
-    rows = list(csv.reader(io.StringIO(_get(url))))
-    if not rows:
-        return {}, {}, {}
-    head = [h.strip().lower() for h in rows[0]]
-    col = lambda *names: next((i for i, h in enumerate(head) if any(n in h for n in names)), None)
-    ci, co, cv, cw = col("дата"), col("заказ"), col("выручк", "сумм"), col("побед", "комментар")
-    cp = col("прибыл")
-    days, wins, profit = {}, {}, {}
-    for r in rows[1:]:
-        d = _date(r[ci]) if ci is not None and ci < len(r) else None
-        if not d or not (start <= d <= end):
-            continue
-        cell = lambda i: r[i] if i is not None and i < len(r) else ""
-        o, v = days.get(d, (0, 0.0))
-        days[d] = (o + int(_num(cell(co))), v + _num(cell(cv)))
-        if cp is not None and cell(cp).strip():
-            profit[d] = profit.get(d, 0.0) + _num(cell(cp))
-        if cell(cw).strip():
-            wins[d] = cell(cw).strip()
-    return days, wins, profit
 
 
 def period(today, calendar):
@@ -179,33 +135,18 @@ def collect(today, calendar):
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []
     wins, profit = {}, {}
-    use_ts = False
-    only_group = bool(os.environ.get("TRUESTATS_GROUP", "").strip())
     season = os.environ.get("SEASON_START", "").strip()
     season_start = dt.date.fromisoformat(season) if season else None
     if season_start and season_start < first:
         first = season_start  # история нужна с начала сезона — для итогов сезона
-    for name, fn in (("TrueStats", truestats), ("Wildberries", wildberries), ("Ozon", ozon), ("таблица", sheet)):
-        if (use_ts and name in ("Wildberries", "Ozon")) or (only_group and name != "TrueStats"):
-            continue  # TrueStats уже включает эти магазины; для группы артикулов другие источники не подходят
-        try:
-            got = fn(first, end)
-            if name == "TrueStats":
-                got, profit = got
-                use_ts = bool(got)
-            elif name == "таблица":
-                got, wins, sheet_profit = got
-                if not use_ts:
-                    profit = sheet_profit
-        except Exception as e:  # один сломанный источник не должен ломать напутствие
-            errors.append(f"{name}: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
-            continue
-        if got is None:
-            continue
-        sources.append(f"{name} ({sum(1 for o, _ in got.values() if o)} дн. с заказами)")
-        for d, (o, v) in got.items():
-            to, tv = total.get(d, (0, 0.0))
-            total[d] = (to + o, tv + v)
+    try:
+        got, profit = truestats(first, end)
+    except Exception as e:  # TrueStats недоступен — напутствие уйдёт без цифр, но уйдёт
+        errors.append(f"TrueStats: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
+        got = None
+    if got is not None:
+        sources.append(f"TrueStats ({sum(1 for o, _ in got.values() if o)} дн. с заказами)")
+        total = dict(got)
 
     length = (end - start).days + 1
     window = lambda s: [s + dt.timedelta(days=i) for i in range(length)]

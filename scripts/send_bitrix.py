@@ -21,7 +21,7 @@ daily[дата] может быть объектом с вариантами п�
   CARD_URL            публичная ссылка на картинку — прикладывается к сообщению в чат
   WISHES_FILE, CARD_TEMPLATE, CARD_PREFIX, MESSAGE_TITLE — для отдельной рассылки (например, новогодней):
                       файл текстов, шаблон картинки, префикс имени картинки и заголовок сообщения
-  WB_API_TOKEN, OZON_CLIENT_ID, OZON_API_KEY, RESULTS_SHEET_CSV_URL — источники итогов дня
+  TRUE_STATS, TRUESTATS_ACCOUNTS, TRUESTATS_GROUP — итоги дня только из TrueStats
                       (см. scripts/day_results.py); без них напутствие уходит без цифр
 """
 import base64
