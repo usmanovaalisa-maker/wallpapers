@@ -1,0 +1,23 @@
+name: Разведка API TrueStats (временно)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      TRUE_STATS: ${{ secrets.TRUE_STATS }}
+    steps:
+      - name: Какие магазины видит ключ (только названия, без цифр)
+        shell: python
+        run: |
+          import os, json, urllib.request
+          r = urllib.request.Request("https://api.truestats.ru/reporting/facets",
+              data=json.dumps({"_dimensions": ["accounts", "accountTypes", "legalEntities"]}).encode(),
+              headers={"X-Api-Token": os.environ["TRUE_STATS"].strip(), "Content-Type": "application/json", "Accept": "application/json"})
+          d = json.loads(urllib.request.urlopen(r, timeout=60).read())
+          for k in ("accounts", "accountTypes", "legalEntities"):
+              print(f"\n{k}:")
+              for a in d.get(k, []):
+                  print("  ", {x: a.get(x) for x in a if x in ("id", "name", "title", "type", "accountType", "marketplace", "code")})
