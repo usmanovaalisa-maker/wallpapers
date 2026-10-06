@@ -4,6 +4,11 @@ on:
   schedule:
     # 06:00 UTC = 10:00 по Самаре; дубль запуска делает ежедневное задание Claude (GitHub опаздывает)
     - cron: "0 6 * * *"
+  # Запуск с компьютера: локальная задача Claude в 10:00 пушит фразы на завтра и отметку
+  # .github/last-local-run — этот push и запускает рассылку (раньше 10:00 по Самаре не отправляет)
+  push:
+    branches: [main]
+    paths: ["wishes/**", ".github/last-local-run"]
   workflow_dispatch:
     inputs:
       date:
@@ -45,10 +50,13 @@ jobs:
       # (признак — сохранённая картинка cards/ng-ДАТА.jpg, её коммитит только настоящая отправка)
       - name: Уже отправляли сегодня?
         id: check
-        if: github.event_name == 'schedule'
+        if: github.event_name != 'workflow_dispatch'
         run: |
           d=$(TZ="${WISH_TZ:-Europe/Samara}" date +%F)
-          if [ -f "cards/ng-$d.jpg" ]; then echo "Уже отправлено за $d — пропускаем."; echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+          h=$(TZ="${WISH_TZ:-Europe/Samara}" date +%H)
+          if [ "${{ github.event_name }}" = "push" ] && [ "$h" -lt 10 ]; then echo "Push раньше 10:00 по Самаре — не отправляем (отправит запуск в 10:00)."; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git fetch -q origin main  # смотрим на свежую main: запуск от push видит только свой коммит
+          if git cat-file -e "origin/main:cards/ng-$d.jpg" 2>/dev/null; then echo "Уже отправлено за $d — пропускаем."; echo "skip=true" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-python@v6
         if: steps.check.outputs.skip != 'true'
