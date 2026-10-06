@@ -5,6 +5,11 @@ daily[дата] может быть объектом с вариантами п�
 ({"record", "up", "steady", "support"}) — вариант выбирается по scripts/day_results.py,
 а строка с цифрами добавляется только в сообщение (не в картинку и не в лог:
 репозиторий публичный). Если на сегодня текста нет (выходной, праздник) — ничего не отправляет.
+Если TrueStats ещё не выгрузил прошедший день (продажи и реализация = 0) — в чат тоже ничего не уходит,
+следующий запуск по расписанию попробует снова.
+
+Контрольная копия: после отправки (и когда отправка отложена) владельцу лично приходит то же сообщение
+и разбивка цифр для сверки с TrueStats — по дням, по магазинам, с чем сравнивали.
 
 Переменные окружения:
   BITRIX_WEBHOOK_URL  входящий вебхук, например https://company.bitrix24.ru/rest/1/abc123/
@@ -14,6 +19,7 @@ daily[дата] может быть объектом с вариантами п�
   BITRIX_DIALOG_ID    куда писать: chat123 (групповой чат) или ID пользователя (личное сообщение,
                       например для проверки — свой ID).
                       Если не задан — пост в Живую ленту для всех сотрудников.
+  BITRIX_CONTROL_ID   ID пользователя для контрольной копии (по умолчанию — BITRIX_DIALOG_ID, если это ID пользователя)
   WISH_TZ             часовой пояс компании (по умолчанию Europe/Samara, GMT+4)
   WISH_DATE           дата ГГГГ-ММ-ДД вместо сегодняшней (для проверки)
   DRY_RUN=1           только показать текст, не отправлять
@@ -152,6 +158,31 @@ def image_attach(url):
     return [{"IMAGE": [{"NAME": "Напутствие дня", "LINK": url, "PREVIEW": url, "WIDTH": 1080, "HEIGHT": 1080}]}]
 
 
+def send_private(webhook, user_id, message):
+    """Личное сообщение (если Битрикс не принимает сообщение самому себе — системное уведомление)."""
+    body = call(webhook, "im.message.add", {"DIALOG_ID": user_id, "MESSAGE": message}, fail=False)
+    if "error" in body:
+        body = call(webhook, "im.notify.system.add", {"USER_ID": int(user_id), "MESSAGE": message}, fail=False)
+    return "error" not in body
+
+
+def send_control(results, status, message=None):
+    """Контрольная копия владельцу: статус, разбивка цифр для сверки и само сообщение. Только лично, не в лог."""
+    import day_results as dr
+    if os.environ.get("DRY_RUN") == "1":
+        return
+    webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
+    user = (os.environ.get("BITRIX_CONTROL_ID") or os.environ.get("BITRIX_DIALOG_ID") or "").strip()
+    if not webhook or not user.isdigit():
+        print("::warning::Контрольная копия не отправлена: нужен BITRIX_CONTROL_ID или BITRIX_DIALOG_ID с ID пользователя.")
+        return
+    chat = os.environ.get("BITRIX_CHAT_NAME", "").strip() or "чат"
+    parts = [f"[B]Контрольная копия — «{chat}», {todays_date()}[/B]", f"Статус: {status}", "", dr.control_text(results)]
+    if message:
+        parts += ["", "[B]Сообщение в чат[/B]:", message]
+    print("Контрольная копия: " + ("отправлена." if send_private(webhook, user, "\n".join(parts)) else "не отправилась."))
+
+
 def main():
     date = todays_date()
     data = team_data()
@@ -159,6 +190,14 @@ def main():
         print(f"{date}: на сегодня напутствия нет — ничего не отправляем.")
         return
     results, stats = day_results(date, data)
+    if not results.get("ready", True):
+        days = ", ".join(dt.date.fromisoformat(d).strftime("%d.%m") for d in results["not_loaded"])
+        print(f"::warning::TrueStats ещё не выгрузил {days} (продажи и реализация = 0) — в чат не отправляем, "
+              "попробует следующий запуск.")
+        if os.environ.get("CARD") != "1":
+            send_control(results, f"⚠️ НЕ отправлено: TrueStats ещё не выгрузил {days} (продажи и реализация = 0). "
+                                  "Следующий запуск по расписанию попробует снова.")
+        return
     text = todays_text(date, results["level"], data)
     # пожелание идёт в сообщение (после цифр) и одно — на картинку; без итогов на картинке основной текст
     reaction = results_reaction(date, results["level"], data) if stats else ""
@@ -199,6 +238,7 @@ def main():
             print(f"::warning::Чат «{chat_name}» не найден (владелец вебхука в нём состоит?) — пишу в {dialog or 'Живую ленту'}.")
     if os.environ.get("DRY_RUN") == "1":
         return
+    message = f"[B]{title}[/B]\n\n{text}"
 
     card_url = os.environ.get("CARD_URL", "").strip()
     card_file = ROOT / "cards" / f"{os.environ.get('CARD_PREFIX', '')}{date}.jpg"
@@ -224,6 +264,7 @@ def main():
                 post["POST_MESSAGE"] += f"\n\n[URL={card_url}]Открыть картинку[/URL]"
             call(webhook, "log.blogpost.add", post)
     print("Отправлено.")
+    send_control(results, f"✅ отправлено в «{chat_name or dialog or 'Живую ленту'}»", message)
 
 
 if __name__ == "__main__":
