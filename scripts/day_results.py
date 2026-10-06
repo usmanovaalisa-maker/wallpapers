@@ -16,7 +16,7 @@
 
 Период — с прошлого рабочего дня по calendar до вчера включительно
 (в понедельник это пятница–воскресенье). Уровень:
-  record  — лучший результат по заказам за последние 30 дней
+  record  — лучший результат по заказам за последние 30 дней (или с начала сезона, если задан SEASON_START)
   up      — больше, чем за такой же период перед ним
   steady  — примерно так же (спад не больше 10%)
   support — спад больше 10% или данных нет: напутствие без цифр
@@ -154,7 +154,8 @@ def collect(today, calendar):
     orders, revenue = summ(start)
     period_profit = [profit[d] for d in window(start) if d in profit]
     prev_orders, _ = summ(start - dt.timedelta(days=length))
-    hist = max(first, end - dt.timedelta(days=HISTORY_DAYS))
+    # рекорд: в сезон — за весь сезон, иначе — за последние 30 дней
+    hist = season_start if season_start else max(first, end - dt.timedelta(days=HISTORY_DAYS))
     past = [summ(hist + dt.timedelta(days=i))[0] for i in range((start - hist).days - length + 1)]
     past = [p for p in past if p]
 
@@ -169,11 +170,10 @@ def collect(today, calendar):
     else:
         level = "support"
     season_days = [d for d in total if season_start and season_start <= d <= end]
-    in_season = bool(season_start) and (end - season_start).days < HISTORY_DAYS
     return {"level": level, "start": start.isoformat(), "end": end.isoformat(), "days": length,
             "season_orders": sum(total[d][0] for d in season_days) if season_start else None,
             "season_revenue": round(sum(total[d][1] for d in season_days)) if season_start else None,
-            "record_label": "лучший результат сезона" if in_season else "лучший результат за месяц",
+            "record_label": "лучший результат сезона" if season_start else "лучший результат за месяц",
             "orders": orders, "revenue": round(revenue),
             "profit": round(sum(period_profit)) if period_profit else None, "prev_orders": prev_orders,
             "wins": [wins[d] for d in sorted(wins) if start <= d <= end],
