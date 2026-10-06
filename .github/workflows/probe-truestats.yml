@@ -9,15 +9,28 @@ jobs:
     env:
       TRUE_STATS: ${{ secrets.TRUE_STATS }}
     steps:
-      - name: Какие магазины видит ключ (только названия, без цифр)
+      - name: Какой ключ фильтра по магазинам работает (в лог — без сумм)
         shell: python
         run: |
-          import os, json, urllib.request
-          r = urllib.request.Request("https://api.truestats.ru/reporting/facets",
-              data=json.dumps({"_dimensions": ["accounts", "accountTypes", "legalEntities"]}).encode(),
-              headers={"X-Api-Token": os.environ["TRUE_STATS"].strip(), "Content-Type": "application/json", "Accept": "application/json"})
-          d = json.loads(urllib.request.urlopen(r, timeout=60).read())
-          for k in ("accounts", "accountTypes", "legalEntities"):
-              print(f"\n{k}:")
-              for a in d.get(k, []):
-                  print("  ", {x: a.get(x) for x in a if x in ("id", "name", "title", "type", "accountType", "marketplace", "code")})
+          import os, json, urllib.request, datetime as dt
+          key = os.environ["TRUE_STATS"].strip()
+          def day(filters):
+              y = dt.date.today() - dt.timedelta(days=1)
+              body = {"dateFrom": (y - dt.timedelta(days=14)).isoformat(), "dateTo": y.isoformat()}
+              if filters is not None: body["filters"] = filters
+              r = urllib.request.Request("https://api.truestats.ru/reporting/aggregated-view/day", data=json.dumps(body).encode(),
+                  headers={"X-Api-Token": key, "Content-Type": "application/json", "Accept": "application/json"})
+              try:
+                  with urllib.request.urlopen(r, timeout=90) as resp: d = json.loads(resp.read())
+              except urllib.error.HTTPError as e:
+                  return e.code, None, e.read().decode()[:200], None
+              return 200, sum(float(x.get("ordersCount") or 0) for x in d.get("result", [])), "", d.get("accountIdsFilter")
+          st, total, _, ids = day(None)
+          print("без фильтра:", st, "accountIdsFilter:", ids)
+          A = [1074, 3730]
+          for f in ({"accounts": A}, {"accountId": A}, {"accountIds": A}, {"accounts": [str(a) for a in A]}, {"accountId": [str(a) for a in A]}):
+              st, t, err, ids = day(f)
+              if st != 200: print(json.dumps(f), "->", st, err); continue
+              print(json.dumps(f), "-> меньше всего:", t < total, "| ноль:", t == 0, "| accountIdsFilter:", ids)
+          st, t1, _, _ = day({"accounts": [1074]}); st, t2, _, _ = day({"accounts": [3730]}); st, t12, _, _ = day({"accounts": A})
+          print("accounts: сумма двух по отдельности == вместе:", abs((t1 or 0) + (t2 or 0) - (t12 or 0)) < 0.5)
