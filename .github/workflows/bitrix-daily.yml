@@ -38,7 +38,7 @@ jobs:
       WISH_DATE: ${{ inputs.date }}
       # Итоги прошедшего дня — только из TrueStats (scripts/day_results.py); цифры не пишутся ни в лог, ни в репозиторий
       TRUE_STATS: ${{ secrets.TRUE_STATS }}
-      # только магазины кабинета «Дари Сейчас» (Wildberries и Ozon)
+      # только магазины «Дари Радость» и «Дари сейчас» (Wildberries и Ozon)
       TRUESTATS_ACCOUNTS: ${{ vars.TRUESTATS_ACCOUNTS || 'Дари Радость, Дари сейчас' }}
     steps:
       - uses: actions/checkout@v5

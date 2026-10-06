@@ -18,10 +18,9 @@
   SEASON_START          начало сезона ГГГГ-ММ-ДД — добавляет итоги с начала сезона
   STATS_LABEL           подпись в строке итогов, например «по НГ-коллекции»
 
-Период — с прошлого рабочего дня по calendar до вчера включительно
-(в понедельник это пятница–воскресенье). Уровень:
-  record  — лучший результат по заказам за последние 30 дней (или с начала сезона, если задан SEASON_START)
-  up      — больше, чем за такой же период перед ним
+Период — всегда один день: вчера, в сравнении с позавчера (в понедельник — воскресенье с субботой). Уровень:
+  record  — лучший день по заказам за последние 30 дней (или с начала сезона, если задан SEASON_START)
+  up      — больше, чем днём раньше
   steady  — примерно так же (спад не больше 10%)
   support — спад больше 10% или TrueStats недоступен: напутствие без цифр
 """
@@ -142,16 +141,14 @@ def by_account(start, end):
     return rows
 
 
-def period(today, calendar):
-    """С прошлого рабочего дня (по calendar) до вчера: во вторник — понедельник, в понедельник — пт–вс."""
-    end = start = today - dt.timedelta(days=1)
-    while start.isoformat() not in calendar and (end - start).days < 6:
-        start -= dt.timedelta(days=1)
-    return start, end
+def period(today):
+    """Всегда вчерашний день — сравнение день ко дню, в том числе в понедельник (воскресенье с субботой)."""
+    end = today - dt.timedelta(days=1)
+    return end, end
 
 
-def collect(today, calendar):
-    start, end = period(today, calendar)
+def collect(today):
+    start, end = period(today)
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []
     wins, profit, sold = {}, {}, {}
@@ -273,7 +270,7 @@ def control_text(r):
         lines += [f"{n} — {num(o)} · {num(rev)} ₽ · {num(s)} ₽ · {num(re_)} ₽ · {num(p)} ₽" for n, o, rev, s, re_, p in r["accounts"]]
     orders = lambda n: f"{num(n)} {_plural(n or 0, 'заказ', 'заказа', 'заказов')}"
     lines += ["", f"Сравнение: {orders(r['orders'])} против {orders(r['prev_orders'])} "
-                  f"за период с {dm(r['prev_start'])} → уровень «{LEVELS.get(r['level'], r['level'])}»"]
+                  f"за {dm(r['prev_start'])} → уровень «{LEVELS.get(r['level'], r['level'])}»"]
     if r.get("record_best") is not None:
         lines.append(f"Лучший прошлый результат с {dm(r['record_from'])}: {orders(r['record_best'])}")
     if r.get("season_orders") is not None:
@@ -282,13 +279,10 @@ def control_text(r):
 
 
 if __name__ == "__main__":
-    import pathlib
     import sys
     from zoneinfo import ZoneInfo
-    root = pathlib.Path(__file__).resolve().parent.parent
-    cal = json.loads((root / "wishes" / "team.json").read_text(encoding="utf-8"))["calendar"]
     today = dt.date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else dt.datetime.now(ZoneInfo("Europe/Samara")).date()
-    r = collect(today, cal)
+    r = collect(today)
     # в лог — только уровень и источники, без цифр
     print(f"{r['start']}…{r['end']}: уровень {r['level']}, источники: {', '.join(r['sources']) or 'нет'}"
           + (f", ошибки: {'; '.join(r['errors'])}" if r["errors"] else ""))

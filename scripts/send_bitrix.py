@@ -89,7 +89,7 @@ def day_results(date, data):
     if cache.exists():
         r = json.loads(cache.read_text(encoding="utf-8"))
     else:
-        r = dr.collect(dt.date.fromisoformat(date), work_calendar())
+        r = dr.collect(dt.date.fromisoformat(date))
         cache.write_text(json.dumps(r, ensure_ascii=False), encoding="utf-8")
         print(f"Итоги {r['start']}…{r['end']}: уровень {r['level']}, источники: {', '.join(r['sources']) or 'нет'}"
               + (f", ошибки: {'; '.join(r['errors'])}" if r["errors"] else ""))
@@ -212,7 +212,7 @@ def main():
                 f.write(f"card=cards/{card.name}\n")
         return
 
-    title = os.environ.get("MESSAGE_TITLE") or "☕ Напутствие дня от «Дари Сейчас»"
+    title = os.environ.get("MESSAGE_TITLE") or "☕ Напутствие дня от «Дари Радость»"
     print(f"{date}: {text}" + ("\n(+ строка с итогами дня — в лог не выводится)" if stats else ""))
     if stats:
         text = f"{text}\n\n{stats}"
