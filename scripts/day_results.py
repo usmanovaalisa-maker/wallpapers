@@ -19,9 +19,10 @@
   STATS_LABEL           подпись в строке итогов, например «по НГ-коллекции»
 
 Период — всегда один день: вчера, в сравнении с позавчера (в понедельник — воскресенье с субботой). Уровень:
-  record  — лучший день по заказам за последние 30 дней (или с начала сезона, если задан SEASON_START)
-  up      — больше, чем днём раньше
-  steady  — примерно так же (спад не больше 10%)
+Уровень считается по выручке (сумме заказов), а не по их количеству:
+  record  — лучший день по выручке за последние 30 дней (или с начала сезона, если задан SEASON_START)
+  up      — выручка больше, чем днём раньше
+  steady  — примерно так же (спад выручки не больше 10%)
   support — спад больше 10% или TrueStats недоступен: напутствие без цифр
 """
 import datetime as dt
@@ -170,10 +171,10 @@ def collect(today):
     summ = lambda s: (sum(total.get(d, (0, 0))[0] for d in window(s)), sum(total.get(d, (0, 0.0))[1] for d in window(s)))
     orders, revenue = summ(start)
     period_profit = [profit[d] for d in window(start) if d in profit]
-    prev_orders, _ = summ(start - dt.timedelta(days=length))
+    prev_orders, prev_revenue = summ(start - dt.timedelta(days=length))
     # рекорд: в сезон — за весь сезон, иначе — за последние 30 дней
     hist = season_start if season_start else max(first, end - dt.timedelta(days=HISTORY_DAYS))
-    past = [summ(hist + dt.timedelta(days=i))[0] for i in range((start - hist).days - length + 1)]
+    past = [summ(hist + dt.timedelta(days=i))[1] for i in range((start - hist).days - length + 1)]
     past = [p for p in past if p]
 
     # данные ещё не выгрузились: за день периода нет строки или продажи и реализация = 0
@@ -185,13 +186,13 @@ def collect(today):
         except Exception as e:
             errors.append(f"TrueStats по магазинам: {type(e).__name__}")
 
-    if not sources or orders == 0:
+    if not sources or orders == 0 or not revenue:
         level = "support"
-    elif len(past) >= 7 and orders > max(past):
+    elif len(past) >= 7 and revenue > max(past):
         level = "record"
-    elif prev_orders and orders > prev_orders:
+    elif prev_revenue and revenue > prev_revenue:
         level = "up"
-    elif not prev_orders or orders >= prev_orders * 0.9:
+    elif not prev_revenue or revenue >= prev_revenue * 0.9:
         level = "steady"
     else:
         level = "support"
@@ -202,6 +203,7 @@ def collect(today):
             "record_label": "лучший результат сезона" if season_start else "лучший результат за месяц",
             "orders": orders, "revenue": round(revenue),
             "profit": round(sum(period_profit)) if period_profit else None, "prev_orders": prev_orders,
+            "prev_revenue": round(prev_revenue),
             "wins": [wins[d] for d in sorted(wins) if start <= d <= end],
             "ready": not not_loaded, "not_loaded": not_loaded,
             "per_day": [[d.isoformat(), *total.get(d, (0, 0.0)), *sold.get(d, (0.0, 0.0)), profit.get(d)]
@@ -234,10 +236,10 @@ def stats_line(r):
             s += f", {num(r['profit'])} ₽ прибыли"
         if r["level"] == "record":
             s += f" — {r.get('record_label') or 'лучший результат за месяц'}!"
-        elif r["level"] == "up" and r["prev_orders"]:
-            pct = round((o / r["prev_orders"] - 1) * 100)
+        elif r["level"] == "up" and r.get("prev_revenue"):
+            pct = round((r["revenue"] / r["prev_revenue"] - 1) * 100)
             if pct >= 1:
-                s += f" — на {pct}% больше, чем " + ("днём раньше" if r["days"] == 1 else "за такой же период перед этим")
+                s += f" — выручка на {pct}% больше, чем " + ("днём раньше" if r["days"] == 1 else "за такой же период перед этим")
         lines.append(s + ("." if not s.endswith("!") else ""))
         if r.get("season_orders"):
             so = r["season_orders"]
@@ -269,10 +271,11 @@ def control_text(r):
         lines += ["", "[B]По магазинам за период[/B]:"]
         lines += [f"{n} — {num(o)} · {num(rev)} ₽ · {num(s)} ₽ · {num(re_)} ₽ · {num(p)} ₽" for n, o, rev, s, re_, p in r["accounts"]]
     orders = lambda n: f"{num(n)} {_plural(n or 0, 'заказ', 'заказа', 'заказов')}"
-    lines += ["", f"Сравнение: {orders(r['orders'])} против {orders(r['prev_orders'])} "
+    lines += ["", f"Сравнение по выручке: {num(r['revenue'])} ₽ ({orders(r['orders'])}) против "
+                  f"{num(r.get('prev_revenue'))} ₽ ({orders(r['prev_orders'])}) "
                   f"за {dm(r['prev_start'])} → уровень «{LEVELS.get(r['level'], r['level'])}»"]
     if r.get("record_best") is not None:
-        lines.append(f"Лучший прошлый результат с {dm(r['record_from'])}: {orders(r['record_best'])}")
+        lines.append(f"Лучшая прошлая выручка за день с {dm(r['record_from'])}: {num(r['record_best'])} ₽")
     if r.get("season_orders") is not None:
         lines.append(f"Сезон: {orders(r['season_orders'])} на {num(r['season_revenue'])} ₽")
     return "\n".join(lines)
