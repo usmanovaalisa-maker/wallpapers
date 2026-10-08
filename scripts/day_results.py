@@ -23,7 +23,8 @@
   record  — лучший день по выручке за последние 30 дней (или с начала сезона, если задан SEASON_START)
   up      — выручка больше, чем днём раньше
   steady  — примерно так же (спад выручки не больше 10%)
-  support — спад больше 10% или TrueStats недоступен: напутствие без цифр
+  support — спад больше 10% или TrueStats недоступен: тёплый текст без оценки результата.
+Строка с цифрами добавляется всегда, когда данные есть (в том числе при спаде) — без процента спада.
 """
 import datetime as dt
 import json
@@ -223,7 +224,7 @@ def _plural(n, one, few, many):
 def stats_line(r):
     """Строка с цифрами для сообщения в чат (не для картинки и не для лога)."""
     lines = []
-    if r["level"] != "support":
+    if r.get("sources") and r.get("orders"):
         dm = lambda d: dt.date.fromisoformat(d).strftime("%d.%m")
         when = "вчера" if r["days"] == 1 else f"с {dm(r['start'])} по {dm(r['end'])}"
         o = r["orders"]
@@ -250,7 +251,7 @@ def stats_line(r):
     return "\n".join(lines)
 
 
-LEVELS = {"record": "рекорд", "up": "рост", "steady": "стабильно", "support": "поддержка, без цифр"}
+LEVELS = {"record": "рекорд", "up": "рост", "steady": "стабильно", "support": "поддержка"}
 
 
 def control_text(r):
