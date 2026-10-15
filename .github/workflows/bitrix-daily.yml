@@ -24,6 +24,10 @@ on:
         description: "Только показать текст и картинку, не отправлять"
         type: boolean
         default: false
+      to_me:
+        description: "Тест: отправить мне (BITRIX_DIALOG_ID), а не в чат «Доброплан»"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # чтобы сохранить картинку дня в папку cards/ и получить на неё ссылку
@@ -40,6 +44,8 @@ jobs:
       TRUE_STATS: ${{ secrets.TRUE_STATS }}
       # только магазины «Дари Радость» и «Дари сейчас» (Wildberries и Ozon)
       TRUESTATS_ACCOUNTS: ${{ vars.TRUESTATS_ACCOUNTS || 'Дари Радость, Дари сейчас' }}
+      # строка «За счёт чего»: бренды-лидеры по выручке и главный рост
+      TRUESTATS_BRANDS: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -95,5 +101,7 @@ jobs:
           BITRIX_WEBHOOK_URL: ${{ secrets.BITRIX_WEBHOOK_URL }}
           BITRIX_DIALOG_ID: ${{ vars.BITRIX_DIALOG_ID }}
           BITRIX_CHAT_NAME: ${{ vars.BITRIX_CHAT_NAME || 'Доброплан 2026 _ Чат руководителей' }}
+          # тест «мне»: чат не ищем, пишем в BITRIX_DIALOG_ID
+          SEND_TO_ME: ${{ (github.event_name == 'workflow_dispatch' && inputs.to_me) && '1' || '' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           CARD_URL: ${{ steps.save.outputs.url }}

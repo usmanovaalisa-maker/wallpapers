@@ -15,6 +15,7 @@
   TRUESTATS_ACCOUNTS    магазины TrueStats через запятую (названия или ID), например
                         «Дари Радость, Дари сейчас» — итоги только по ним
   TRUESTATS_GROUP       группа артикулов TrueStats (название, например «НГ26-27/Новый год 2027», или ID) — итоги только по ней
+  TRUESTATS_BRANDS      «1» — добавить строку «За счёт чего»: лидеры по выручке среди брендов и главный рост
   SEASON_START          начало сезона ГГГГ-ММ-ДД — добавляет итоги с начала сезона
   STATS_LABEL           подпись в строке итогов, например «по НГ-коллекции»
 
@@ -101,7 +102,7 @@ def truestats_account_ids(names):
     return ids
 
 
-def truestats(start, end, accounts=None):
+def truestats(start, end, accounts=None, brands=None):
     """Заказы, сумма заказов, прибыль, продажи и реализация по дням из TrueStats
     (с фильтром по магазинам и/или группе артикулов; accounts — список ID вместо TRUESTATS_ACCOUNTS)."""
     key = os.environ.get("TRUE_STATS", "").strip()
@@ -115,6 +116,8 @@ def truestats(start, end, accounts=None):
     names = os.environ.get("TRUESTATS_ACCOUNTS", "").strip()
     if accounts or names:
         filters["accounts"] = accounts or truestats_account_ids(names)
+    if brands:
+        filters["brands"] = list(brands)
     if filters:
         body["filters"] = filters
     res = _ts("/reporting/aggregated-view/day", body)
@@ -141,6 +144,36 @@ def by_account(start, end):
                      round(sum(s for s, _ in sold.values())), round(sum(r for _, r in sold.values())),
                      round(sum(profit.values()))])
     return rows
+
+
+MAX_BRANDS = 25
+
+
+def truestats_brands(accounts):
+    """Названия брендов в выбранных магазинах (фасет brands)."""
+    body = {"_dimensions": ["brands"]}
+    if accounts:
+        body["filters"] = {"accounts": accounts}
+    out = []
+    for b in _ts("/reporting/facets", body).get("brands", []):
+        name = b.get("name") or b.get("value") or b.get("id") if isinstance(b, dict) else b
+        if name and str(name).strip() and str(name) not in out:
+            out.append(str(name))
+    return out
+
+
+def by_brand(prev_start, start, end):
+    """Выручка и заказы по брендам за период и за такой же период перед ним — для строки «за счёт чего»."""
+    names = os.environ.get("TRUESTATS_ACCOUNTS", "").strip()
+    accounts = truestats_account_ids(names) if names else None
+    rows = []
+    for brand in truestats_brands(accounts)[:MAX_BRANDS]:
+        days, _, _ = truestats(prev_start, end, accounts, [brand])
+        cur = [v for d, v in days.items() if start <= d <= end]
+        prev = [v for d, v in days.items() if prev_start <= d < start]
+        rows.append({"brand": brand, "orders": sum(o for o, _ in cur), "revenue": round(sum(r for _, r in cur)),
+                     "prev_revenue": round(sum(r for _, r in prev))})
+    return sorted(rows, key=lambda x: -x["revenue"])
 
 
 def period(today):
@@ -186,6 +219,12 @@ def collect(today):
             accounts = by_account(start, end)
         except Exception as e:
             errors.append(f"TrueStats по магазинам: {type(e).__name__}")
+    brands = []
+    if sources and not not_loaded and os.environ.get("TRUESTATS_BRANDS") == "1":
+        try:
+            brands = by_brand(start - dt.timedelta(days=length), start, end)
+        except Exception as e:  # без разбивки по брендам сообщение всё равно уйдёт
+            errors.append(f"TrueStats по брендам: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
 
     if not sources or orders == 0 or not revenue:
         level = "support"
@@ -209,7 +248,7 @@ def collect(today):
             "ready": not not_loaded, "not_loaded": not_loaded,
             "per_day": [[d.isoformat(), *total.get(d, (0, 0.0)), *sold.get(d, (0.0, 0.0)), profit.get(d)]
                         for d in window(start)],
-            "accounts": accounts, "prev_start": (start - dt.timedelta(days=length)).isoformat(),
+            "accounts": accounts, "brands": brands, "prev_start": (start - dt.timedelta(days=length)).isoformat(),
             "record_from": hist.isoformat(), "record_best": max(past) if past else None,
             "sources": sources, "errors": errors}
 
@@ -219,6 +258,38 @@ def _plural(n, one, few, many):
     if n % 10 == 1 and n % 100 != 11:
         return one
     return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def _short(n):
+    """1 234 567 → «1,2 млн», 345 600 → «346 тыс.»"""
+    n = abs(n)
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}".replace(".", ",").replace(",0", "") + " млн"
+    if n >= 1000:
+        return f"{round(n / 1000)} тыс."
+    return str(round(n))
+
+
+def brands_line(r, top=3):
+    """Коротко, за счёт чего результат: лидеры по выручке и бренд, который дал больше всего роста."""
+    rows = [b for b in r.get("brands") or [] if b["revenue"] > 0]
+    if len(rows) < 2:
+        return ""
+    def item(b):
+        s = f"«{b['brand']}» — {_short(b['revenue'])} ₽"
+        if b["prev_revenue"]:
+            pct = round((b["revenue"] / b["prev_revenue"] - 1) * 100)
+            if pct:
+                s += f" ({'+' if pct > 0 else '−'}{abs(pct)}%)"
+        return s
+    leaders = rows[:top]
+    line = "За счёт чего: " + ", ".join(item(b) for b in leaders) + "."
+    growth = max(r["brands"], key=lambda b: b["revenue"] - b["prev_revenue"])
+    gain = growth["revenue"] - growth["prev_revenue"]
+    if gain > 0 and r.get("revenue", 0) > r.get("prev_revenue", 0):
+        line += f" Больше всего роста дал «{growth['brand']}»: +{_short(gain)} ₽ к " + \
+                ("позавчерашнему дню." if r["days"] == 1 else "прошлому периоду.")
+    return line
 
 
 def stats_line(r):
@@ -242,6 +313,9 @@ def stats_line(r):
             if pct >= 1:
                 s += f" — выручка на {pct}% больше, чем " + ("днём раньше" if r["days"] == 1 else "за такой же период перед этим")
         lines.append(s + ("." if not s.endswith("!") else ""))
+        drivers = brands_line(r)
+        if drivers:
+            lines.append(drivers)
         if r.get("season_orders"):
             so = r["season_orders"]
             lines.append(f"С начала сезона: {num(so)} {_plural(so, 'заказ', 'заказа', 'заказов')}"
@@ -275,6 +349,9 @@ def control_text(r):
     lines += ["", f"Сравнение по выручке: {num(r['revenue'])} ₽ ({orders(r['orders'])}) против "
                   f"{num(r.get('prev_revenue'))} ₽ ({orders(r['prev_orders'])}) "
                   f"за {dm(r['prev_start'])} → уровень «{LEVELS.get(r['level'], r['level'])}»"]
+    if r.get("brands"):
+        lines += ["", "[B]По брендам[/B] (заказы · выручка · выручка днём раньше):"]
+        lines += [f"{b['brand']} — {num(b['orders'])} · {num(b['revenue'])} ₽ · {num(b['prev_revenue'])} ₽" for b in r["brands"]]
     if r.get("record_best") is not None:
         lines.append(f"Лучшая прошлая выручка за день с {dm(r['record_from'])}: {num(r['record_best'])} ₽")
     if r.get("season_orders") is not None:
