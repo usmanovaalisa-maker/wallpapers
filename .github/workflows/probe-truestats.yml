@@ -1,0 +1,54 @@
+name: Временная проверка TrueStats (бренды)
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      TRUE_STATS: ${{ secrets.TRUE_STATS }}
+    steps:
+      - name: Какой фильтр по брендам работает (в лог — без сумм)
+        shell: python
+        run: |
+          import os, json, urllib.request, urllib.error, datetime as dt
+          key = os.environ["TRUE_STATS"].strip()
+          def ts(path, body):
+              r = urllib.request.Request("https://api.truestats.ru" + path, data=json.dumps(body).encode(),
+                  headers={"X-Api-Token": key, "Content-Type": "application/json", "Accept": "application/json"})
+              try:
+                  with urllib.request.urlopen(r, timeout=90) as resp: return 200, json.loads(resp.read())
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()[:300]
+          A = [1074, 3730]
+          for fk in (None, "accounts", "accountIds"):
+              body = {"_dimensions": ["brands"]}
+              if fk: body["filters"] = {fk: A}
+              st, d = ts("/reporting/facets", body)
+              if st != 200: print("facets", fk, "->", st, d); continue
+              b = d.get("brands", [])
+              print(f"facets brands, фильтр {fk}: {len(b)} шт.; пример: {json.dumps(b[:8], ensure_ascii=False)}")
+              print("  ключи ответа:", list(d.keys()))
+          y = dt.date.today() - dt.timedelta(days=1)
+          def total(filters):
+              st, d = ts("/reporting/aggregated-view/day", {"dateFrom": (y - dt.timedelta(days=6)).isoformat(), "dateTo": y.isoformat(), "filters": filters})
+              if st != 200: return st, None, d
+              return st, sum(float(x.get("orders") or 0) for x in d.get("result", [])), {k: v for k, v in d.items() if k != "result"}
+          st, base, meta = total({"accounts": A})
+          print("только магазины:", st, "прочие поля ответа:", json.dumps(meta, ensure_ascii=False)[:400])
+          st, d = ts("/reporting/facets", {"_dimensions": ["brands"], "filters": {"accounts": A}})
+          brands = d.get("brands", []) if st == 200 else []
+          names = [(x.get("name") or x.get("value") or x.get("id")) if isinstance(x, dict) else x for x in brands]
+          ids = [x.get("id") for x in brands if isinstance(x, dict)]
+          n = names[0] if names else "Дари Радость"
+          tests = [{"brands": [n]}, {"brand": [n]}, {"brandNames": [n]}, {"brands": n}]
+          if ids and ids[0] is not None: tests += [{"brands": [ids[0]]}, {"brandIds": [ids[0]]}, {"brand": [ids[0]]}]
+          for extra in tests:
+              f = {"accounts": A, **extra}
+              st, t, meta = total(f)
+              if st != 200: print(json.dumps(extra, ensure_ascii=False), "->", st, meta); continue
+              print(json.dumps(extra, ensure_ascii=False), "-> меньше, чем без бренда:", t < base, "| ноль:", t == 0, "| поля:", json.dumps(meta, ensure_ascii=False)[:200])
+          # сумма по всем брендам должна совпасть с итогом магазинов
+          if names:
+              s = 0
+              for nm in names[:30]:
+                  st, t, _ = total({"accounts": A, "brands": [nm]}); s += t or 0
+              print(f"сумма по {min(30, len(names))} брендам ≈ итог магазинов:", abs(s - base) < max(1, base * 0.01), "| больше итога в разы:", s > base * 1.5)
