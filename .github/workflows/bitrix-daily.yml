@@ -45,7 +45,7 @@ jobs:
       # только магазины «Дари Радость» и «Дари сейчас» (Wildberries и Ozon)
       TRUESTATS_ACCOUNTS: ${{ vars.TRUESTATS_ACCOUNTS || 'Дари Радость, Дари сейчас' }}
       # строка «За счёт чего»: бренды-лидеры по выручке и главный рост
-      TRUESTATS_BRANDS: "1"
+      TRUESTATS_BRANDS: ""  # выключено: фильтр по брендам в TrueStats не сработал, ищем правильный
     steps:
       - uses: actions/checkout@v5
 
