@@ -146,33 +146,32 @@ def by_account(start, end):
     return rows
 
 
-MAX_BRANDS = 25
+MAX_BRANDS = 80
 
 
 def truestats_brands(accounts):
-    """Названия брендов в выбранных магазинах (фасет brands)."""
+    """Бренды (ID и название) в выбранных магазинах — фасет brands. Фильтр по бренду в TrueStats — по ID."""
     body = {"_dimensions": ["brands"]}
     if accounts:
         body["filters"] = {"accounts": accounts}
-    out = []
-    for b in _ts("/reporting/facets", body).get("brands", []):
-        name = b.get("name") or b.get("value") or b.get("id") if isinstance(b, dict) else b
-        if name and str(name).strip() and str(name) not in out:
-            out.append(str(name))
-    return out
+    return [(int(b["id"]), str(b.get("name") or b["id"])) for b in _ts("/reporting/facets", body).get("brands", [])
+            if isinstance(b, dict) and b.get("id") is not None]
 
 
-def by_brand(prev_start, start, end):
+def by_brand(prev_start, start, end, total_revenue=None):
     """Выручка и заказы по брендам за период и за такой же период перед ним — для строки «за счёт чего»."""
     names = os.environ.get("TRUESTATS_ACCOUNTS", "").strip()
     accounts = truestats_account_ids(names) if names else None
     rows = []
-    for brand in truestats_brands(accounts)[:MAX_BRANDS]:
-        days, _, _ = truestats(prev_start, end, accounts, [brand])
+    for bid, brand in truestats_brands(accounts)[:MAX_BRANDS]:
+        days, _, _ = truestats(prev_start, end, accounts, [bid])
         cur = [v for d, v in days.items() if start <= d <= end]
         prev = [v for d, v in days.items() if prev_start <= d < start]
         rows.append({"brand": brand, "orders": sum(o for o, _ in cur), "revenue": round(sum(r for _, r in cur)),
                      "prev_revenue": round(sum(r for _, r in prev))})
+    # защита: если фильтр по бренду не сработал, у каждого бренда будет весь итог магазинов — такую разбивку не показываем
+    if total_revenue and sum(r["revenue"] for r in rows) > total_revenue * 1.05:
+        raise ValueError("сумма по брендам больше итога — фильтр по бренду не применился")
     return sorted(rows, key=lambda x: -x["revenue"])
 
 
@@ -222,9 +221,9 @@ def collect(today):
     brands = []
     if sources and not not_loaded and os.environ.get("TRUESTATS_BRANDS") == "1":
         try:
-            brands = by_brand(start - dt.timedelta(days=length), start, end)
+            brands = by_brand(start - dt.timedelta(days=length), start, end, revenue)
         except Exception as e:  # без разбивки по брендам сообщение всё равно уйдёт
-            errors.append(f"TrueStats по брендам: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else ""))
+            errors.append(f"TrueStats по брендам: {type(e).__name__}" + (f" {e.code}" if hasattr(e, "code") else f" {e}"))
 
     if not sources or orders == 0 or not revenue:
         level = "support"
