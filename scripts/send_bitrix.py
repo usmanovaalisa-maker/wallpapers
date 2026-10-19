@@ -4,7 +4,7 @@
 daily[дата] может быть объектом с вариантами под итоги прошедшего дня
 ({"record", "up", "steady", "support"}) — вариант выбирается по scripts/day_results.py,
 а строка с цифрами добавляется только в сообщение (не в картинку и не в лог:
-репозиторий публичный). Если на сегодня текста нет (выходной, праздник) — ничего не отправляет.
+репозиторий публичный). Рассылка каждый день; если свежего текста и календаря на дату нет — берётся запасной из fallback.
 Если TrueStats ещё не выгрузил прошедший день (продажи и реализация = 0) — в чат тоже ничего не уходит,
 следующий запуск по расписанию попробует снова.
 
@@ -50,11 +50,6 @@ def team_data():
     return json.loads((ROOT / (os.environ.get("WISHES_FILE") or "wishes/team.json")).read_text(encoding="utf-8"))
 
 
-def work_calendar():
-    """Рабочие дни всегда по календарю напутствия команде (wishes/team.json)."""
-    return json.loads((ROOT / "wishes" / "team.json").read_text(encoding="utf-8")).get("calendar", {})
-
-
 def todays_text(date, level="support", data=None):
     data = data or team_data()
     daily = data.get("daily", {}).get(date)
@@ -64,9 +59,9 @@ def todays_text(date, level="support", data=None):
         daily = next((daily[k] for k in (level, "support", "steady", "up") if daily.get(k)), None)
     if daily or data.get("calendar", {}).get(date):
         return daily or data["calendar"][date]
-    # запасные тексты рассылки без календаря (например, новогодней) — только в рабочие дни
+    # запасные тексты — рассылка уходит каждый день, включая выходные и праздники
     options = (data.get("fallback") or {}).get(level) or (data.get("fallback") or {}).get("support") or []
-    if options and date in work_calendar():
+    if options:
         return options[dt.date.fromisoformat(date).toordinal() % len(options)]
     return None
 
