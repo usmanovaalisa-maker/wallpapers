@@ -194,7 +194,9 @@ def main():
         days = ", ".join(dt.date.fromisoformat(d).strftime("%d.%m") for d in results["not_loaded"])
         print(f"::warning::TrueStats ещё не выгрузил {days} (продажи и реализация = 0) — в чат не отправляем, "
               "попробует следующий запуск.")
-        if os.environ.get("CARD") != "1":
+        # повторы идут каждый час — о задержке пишем владельцу только с 17:00, когда это уже необычно
+        hour = dt.datetime.now(ZoneInfo(os.environ.get("WISH_TZ") or "Europe/Samara")).hour
+        if os.environ.get("CARD") != "1" and hour >= 17:
             send_control(results, f"⚠️ НЕ отправлено: TrueStats ещё не выгрузил {days} (продажи и реализация = 0). "
                                   "Следующий запуск по расписанию попробует снова.")
         return
