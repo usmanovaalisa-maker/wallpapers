@@ -6,9 +6,10 @@
 Источник один: TrueStats, метод «Агрегированный вид по дням» (как вкладка «По дням» в оцифровке):
 заказы (ordersCount), сумма заказов (orders), продажи (sales), реализация (realisation) и прибыль (profit) по дням.
 
-Данные ещё не выгрузились: TrueStats заполняет день с задержкой — сначала приходят заказы,
-а продажи и реализация остаются нулём. Если хотя бы за один день периода продажи и реализация = 0
-(или дня нет в ответе), ready = False — рассылку в чаты не отправляем.
+Данные ещё не выгрузились: TrueStats заполняет день с задержкой — сначала приходят заказы и реклама,
+а продажи и реализация подтягиваются частями (прибыль тогда выходит почти «минус реклама»). Если хотя бы
+за один день периода реализация меньше половины суммы заказов (MIN_REALISATION_SHARE; без заказов — продажи
+и реализация = 0) или дня нет в ответе, ready = False — рассылку в чаты не отправляем.
 
 Переменные окружения:
   TRUE_STATS            API-токен TrueStats (обязателен; без него напутствие уходит без цифр)
@@ -36,6 +37,8 @@ import urllib.error
 import urllib.request
 
 HISTORY_DAYS = 30
+# день считается выгруженным, когда реализация дошла до этой доли суммы заказов
+MIN_REALISATION_SHARE = 0.5
 
 
 def _get(url, headers=None, data=None, retry=True):
@@ -210,8 +213,13 @@ def collect(today):
     past = [summ(hist + dt.timedelta(days=i))[1] for i in range((start - hist).days - length + 1)]
     past = [p for p in past if p]
 
-    # данные ещё не выгрузились: за день периода нет строки или продажи и реализация = 0
-    not_loaded = [d.isoformat() for d in window(start) if got is not None and not any(sold.get(d, (0, 0)))]
+    # данные ещё не выгрузились: за день периода нет строки, реализация меньше половины суммы заказов
+    # (или, если заказов нет, продажи и реализация = 0)
+    def loaded(d):
+        sales, real = sold.get(d, (0.0, 0.0))
+        day_revenue = total.get(d, (0, 0.0))[1]
+        return real >= day_revenue * MIN_REALISATION_SHARE if day_revenue else bool(sales or real)
+    not_loaded = [d.isoformat() for d in window(start) if got is not None and not loaded(d)]
     accounts = []
     if sources and not not_loaded:
         try:
