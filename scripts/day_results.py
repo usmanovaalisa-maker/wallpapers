@@ -4,7 +4,8 @@
 они попадают только в сообщение в Битрикс24 и в контрольную копию владельцу (control_text).
 
 Источник один: TrueStats, метод «Агрегированный вид по дням» (как вкладка «По дням» в оцифровке):
-заказы (ordersCount), сумма заказов (orders), продажи (sales), реализация (realisation) и прибыль (profit) по дням.
+заказы (ordersCount), сумма заказов (orders), продажи (sales), реализация (realisation) и прибыль по дням —
+с 28.10.2026 без опер. расходов (profitWithoutExpense): «Дари Радость» перешло на ОСНО.
 
 Данные ещё не выгрузились: TrueStats заполняет день с задержкой — сначала приходят заказы и реклама,
 а продажи и реализация подтягиваются частями (прибыль тогда выходит почти «минус реклама»). Если хотя бы
@@ -130,8 +131,10 @@ def truestats(start, end, accounts=None, brands=None):
         if d and start <= d <= end:
             days[d] = (int(_num(r.get("ordersCount"))), _num(r.get("orders")))
             sold[d] = (_num(r.get("sales")), _num(r.get("realisation")))
-            if r.get("profit") is not None:
-                profit[d] = _num(r.get("profit"))
+            # с 28.10.2026 «Дари Радость» на ОСНО: в опер. расходах плановые налоговые суммы финотдела,
+            # поэтому прибыль — без опер. расходов (по памятке финотдела), а не чистая
+            if r.get("profitWithoutExpense") is not None:
+                profit[d] = _num(r.get("profitWithoutExpense"))
     return days, profit, sold
 
 
@@ -312,7 +315,7 @@ def stats_line(r):
         if r["revenue"]:
             s += f" на {num(r['revenue'])} ₽"
         if r.get("profit"):
-            s += f", {num(r['profit'])} ₽ прибыли"
+            s += f", {num(r['profit'])} ₽ прибыли без опер. расходов"
         if r["level"] == "record":
             s += f" — {r.get('record_label') or 'лучший результат за месяц'}!"
         elif r["level"] == "up" and r.get("prev_revenue"):
@@ -344,7 +347,7 @@ def control_text(r):
         flt.append(f"группа «{os.environ['TRUESTATS_GROUP'].strip()}»")
     lines = [f"Фильтр TrueStats: {', '.join(flt) or 'весь кабинет'}",
              f"Источник: {', '.join(r['sources']) or 'нет'}" + (f"; ошибки: {'; '.join(r['errors'])}" if r["errors"] else ""),
-             "", "[B]По дням[/B] (заказы · сумма заказов · продажи · реализация · прибыль):"]
+             "", "[B]По дням[/B] (заказы · сумма заказов · продажи · реализация · прибыль без опер. расх.):"]
     for d, o, rev, sales, real, prof in r.get("per_day", []):
         lines.append(f"{dm(d)} — {num(o)} · {num(rev)} ₽ · {num(sales)} ₽ · {num(real)} ₽ · "
                      + (f"{num(prof)} ₽" if prof is not None else "нет данных")
