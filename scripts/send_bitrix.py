@@ -76,6 +76,12 @@ def results_reaction(date, level, data):
     return options[dt.date.fromisoformat(date).toordinal() % len(options)] if options else ""
 
 
+def todays_occasion(date, data):
+    """Повод для радости этого дня (daily[дата]["occasion"]) — отдельной строкой в конце сообщения."""
+    daily = data.get("daily", {}).get(date)
+    return str(daily.get("occasion") or "").strip() if isinstance(daily, dict) else ""
+
+
 def day_results(date, data):
     """Итоги прошедшего дня: считаем один раз за запуск (у WB лимит — 1 запрос в минуту)
     и держим во временной папке раннера, вне репозитория."""
@@ -215,6 +221,9 @@ def main():
         text = f"{text}\n\n{stats}"
         if reaction:
             text += f"\n\n{reaction}"
+    occasion = todays_occasion(date, data)
+    if occasion:
+        text += f"\n\n🎁 [B]Повод для радости[/B]: {occasion}"
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
     if not webhook:
         print("::warning::Не задан секрет BITRIX_WEBHOOK_URL — сообщение не отправлено.")

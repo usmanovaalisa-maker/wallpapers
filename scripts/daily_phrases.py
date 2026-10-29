@@ -44,6 +44,16 @@ FILES = {"fans": "wishes/fans.json", "team": "wishes/team.json", "ng": "wishes/n
 ACTIVE = ["ng"]
 MAIN_KEYS = ["record", "up", "steady", "support"]
 REACTION_KEYS = ["reaction_" + k for k in MAIN_KEYS]
+# необязательное поле: повод для радости этого дня — отдельной строкой в конце сообщения
+OPTIONAL_KEYS = ["occasion"]
+OCCASION_HINT = """Поле "occasion" (необязательное, до 160 символов): повод для радости ДАТЫ — найди веб-поиском
+праздники и памятные дни этой даты и возьми ОДИН, близкий бренду: подарки и сюрпризы (день подарков, сюрпризов,
+объятий, комплиментов, доброты, благодарности), тёплые семейные праздники и поводы для радости (день улыбки, мамы,
+папы, бабушек и дедушек, семьи, друзей, первый снег), детское (каникулы, сказки, игры, сладости, мороженое),
+новогоднее и зимнее (Дед Мороз, ёлка, мандарины, Рождество). Напиши 1–2 предложения: что за день и как его
+порадоваться, на «вы»/«команда», например: «Сегодня Всемирный день доброты — отличный повод сказать коллегам
+что-то приятное». Профессиональные дни, технологии, спорт, памятные и религиозные даты, политику, трагедии,
+болезни, чужие бренды и знаменитостей не бери. Если подходящего повода нет — поле не добавляй, ничего не выдумывай."""
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 # Папки scratchpad сессий Claude, запущенных в этом репозитории
 SCRATCH_GLOB = "/private/tmp/claude-*/-Users-alisatitova-Documents-wallpapers/*/scratchpad/phrases.json"
@@ -102,6 +112,8 @@ def cmd_start():
         print("\nВсё уже заполнено — сразу publish.")
         return
 
+    if "ng" in todo:
+        print("\n" + OCCASION_HINT)
     print(f"\nЧерновик сохрани инструментом Write в свою папку scratchpad как phrases.json, "
           f'с "date": "{date}" и ключами: {", ".join(todo)}. Затем: python3 scripts/daily_phrases.py add')
 
@@ -154,10 +166,13 @@ def find_draft(arg):
 
 def check_obj(key, obj, errors):
     if not isinstance(obj, dict):
-        errors.append(f"{key}: нужен объект с восемью полями")
+        errors.append(f"{key}: нужен объект с восемью полями (и необязательным occasion)")
         return
     missing = [f for f in MAIN_KEYS + REACTION_KEYS if not str(obj.get(f, "")).strip()]
-    extra = [f for f in obj if f not in MAIN_KEYS + REACTION_KEYS]
+    extra = [f for f in obj if f not in MAIN_KEYS + REACTION_KEYS + OPTIONAL_KEYS]
+    occ = str(obj.get("occasion", ""))
+    if len(occ) > 160:
+        errors.append(f"{key}.occasion: {len(occ)} символов, нужно до 160")
     if missing:
         errors.append(f"{key}: нет полей {missing}")
     if extra:
@@ -252,7 +267,8 @@ def cmd_add(arg):
         p.write_text(txt[:idx + 1] + block + txt[idx + 1:], encoding="utf-8")
     for k in ("team", "ng"):
         if k in new:
-            data[k]["daily"][date] = {f: new[k][f] for f in MAIN_KEYS + REACTION_KEYS}
+            data[k]["daily"][date] = {f: new[k][f] for f in MAIN_KEYS + REACTION_KEYS + OPTIONAL_KEYS
+                                      if str(new[k].get(f, "")).strip()}
             (ROOT / FILES[k]).write_text(json.dumps(data[k], ensure_ascii=False, indent=1) + "\n",
                                          encoding="utf-8")
 
