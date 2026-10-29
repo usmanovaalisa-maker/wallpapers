@@ -16,6 +16,7 @@
       коммит «Свежие фразы на ДАТА» (или «Запуск рассылок») и push в main с повторами.
       Этот push запускает сегодняшние рассылки в GitHub Actions.
 
+С 29.10.2026 пишем только ng (новогодняя рассылка); fans и team отключены и пропускаются.
 Черновик — JSON с любыми из ключей fans / team / ng:
   {"date": "ГГГГ-ММ-ДД",
    "fans": ["12 фраз подписчикам"],
@@ -38,6 +39,9 @@ from zoneinfo import ZoneInfo
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TZ = ZoneInfo("Europe/Samara")
 FILES = {"fans": "wishes/fans.json", "team": "wishes/team.json", "ng": "wishes/ng.json"}
+# С 29.10.2026 пишем только новогоднюю рассылку: «Доброплан» (team) и подписчики (fans) отключены.
+# Их файлы остаются для проверки похожести и календаря рабочих дней (calendar в team.json).
+ACTIVE = ["ng"]
 MAIN_KEYS = ["record", "up", "steady", "support"]
 REACTION_KEYS = ["reaction_" + k for k in MAIN_KEYS]
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
@@ -85,10 +89,13 @@ def cmd_start():
     print(f"ДАТА = {date}, {WEEKDAYS[day.weekday()]}"
           + (" — последний рабочий день месяца" if is_last_workday_of_month(day) else ""))
     data = {k: load(k) for k in FILES}
-    todo = [k for k in FILES if date not in data[k].get("daily", {})]
-    for k in FILES:
-        print(f"  {FILES[k]}: " + ("нужно написать" if k in todo else "уже есть — пропустить"))
     cal = data["team"].get("calendar", {}).get(date)
+    if not cal:
+        print(f"{date} — не рабочий день (нет в calendar team.json): тексты не нужны — сразу publish.")
+        return
+    todo = [k for k in ACTIVE if date not in data[k].get("daily", {})]
+    for k in ACTIVE:
+        print(f"  {FILES[k]}: " + ("нужно написать" if k in todo else "уже есть — пропустить"))
     if cal:
         print(f"calendar[{date}] в team.json (сохрани этот повод в основных текстах): {cal}")
     if not todo:
@@ -183,6 +190,9 @@ def cmd_add(arg):
     for k in FILES:
         if k not in draft:
             continue
+        if k not in ACTIVE:
+            warnings.append(f"{FILES[k]}: эта рассылка отключена — пропускаю")
+            continue
         if date in data[k].get("daily", {}):
             warnings.append(f"{FILES[k]}: daily[{date}] уже есть — пропускаю")
             continue
@@ -262,7 +272,7 @@ def cmd_add(arg):
             if rest != {kk: vv for kk, vv in data["fans"].items() if kk != "daily"}:
                 rollback("fans.json: вставка задела что-то кроме daily")
 
-    for extra in ({}, {"WISHES_FILE": "wishes/ng.json"}):
+    for extra in ({"WISHES_FILE": "wishes/ng.json"},):
         env = {**os.environ, "WISH_DATE": date, "DRY_RUN": "1", **extra}
         r = subprocess.run([sys.executable, "scripts/send_bitrix.py"], cwd=ROOT, env=env,
                            capture_output=True, text=True)
@@ -281,7 +291,7 @@ def cmd_publish():
     changed = git("diff", "--cached", "--name-only").stdout.split()
     if not changed:
         sys.exit("Нечего коммитить: сначала python3 scripts/daily_phrases.py start")
-    msg = f"Свежие фразы на {date}" if any(c.startswith("wishes/") for c in changed) else "Запуск рассылок"
+    msg = f"Новогодние тексты на {date}" if any(c.startswith("wishes/") for c in changed) else "Запуск рассылки"
     git("commit", "-q", "-m", msg)
     for attempt in range(1, 5):
         r = git("push", "-q", "origin", "HEAD:main", check=False)
