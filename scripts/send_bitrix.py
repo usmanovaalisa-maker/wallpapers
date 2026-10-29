@@ -207,8 +207,12 @@ def main():
 
     if os.environ.get("CARD") == "1":
         from make_card import make_card
+        daily = data.get("daily", {}).get(date)
+        occ = None
+        if isinstance(daily, dict) and str(daily.get("occasion_title") or "").strip():
+            occ = {"title": daily["occasion_title"].strip(), "icon": daily.get("occasion_icon") or "gift"}
         card = make_card(date, reaction or text, os.environ.get("CARD_TEMPLATE") or "template.html",
-                         os.environ.get("CARD_PREFIX", ""))
+                         os.environ.get("CARD_PREFIX", ""), occ)
         print(f"Картинка: {card}")
         if os.environ.get("GITHUB_OUTPUT"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:

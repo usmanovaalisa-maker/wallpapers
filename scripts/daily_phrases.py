@@ -45,7 +45,8 @@ ACTIVE = ["ng"]
 MAIN_KEYS = ["record", "up", "steady", "support"]
 REACTION_KEYS = ["reaction_" + k for k in MAIN_KEYS]
 # необязательное поле: повод для радости этого дня — отдельной строкой в конце сообщения
-OPTIONAL_KEYS = ["occasion"]
+OPTIONAL_KEYS = ["occasion", "occasion_title", "occasion_icon"]
+ICONS = ["gift", "heart", "smile", "snowflake", "candy", "family", "tree", "star", "tea", "cake", "toy"]
 OCCASION_HINT = """Поле "occasion" (необязательное, до 160 символов): повод для радости ДАТЫ — найди веб-поиском
 праздники и памятные дни этой даты и возьми ОДИН, близкий бренду: подарки и сюрпризы (день подарков, сюрпризов,
 объятий, комплиментов, доброты, благодарности), тёплые семейные праздники и поводы для радости (день улыбки, мамы,
@@ -53,7 +54,12 @@ OCCASION_HINT = """Поле "occasion" (необязательное, до 160 �
 новогоднее и зимнее (Дед Мороз, ёлка, мандарины, Рождество). Напиши 1–2 предложения: что за день и как его
 порадоваться, на «вы»/«команда», например: «Сегодня Всемирный день доброты — отличный повод сказать коллегам
 что-то приятное». Профессиональные дни, технологии, спорт, памятные и религиозные даты, политику, трагедии,
-болезни, чужие бренды и знаменитостей не бери. Если подходящего повода нет — поле не добавляй, ничего не выдумывай."""
+болезни, чужие бренды и знаменитостей не бери. Если подходящего повода нет — поле не добавляй, ничего не выдумывай.
+Вместе с "occasion" добавь для наклейки на картинке: "occasion_title" — короткое название дня, до 26 символов
+(например «День доброты», «Всемирный день улыбки»), и "occasion_icon" — значок, один из: gift, heart, smile,
+snowflake, candy, family, tree, star, tea, cake, toy (подарки — gift, доброта/любовь — heart, улыбка/радость — smile,
+снег/зима — snowflake, сладости — candy, семья/бабушки/папы/мамы — family, Новый год/ёлка — tree, тёплые слова/мечты — star,
+чай — tea, день рождения/торт — cake, детское/игрушки — toy)."""
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 # Папки scratchpad сессий Claude, запущенных в этом репозитории
 SCRATCH_GLOB = "/private/tmp/claude-*/-Users-alisatitova-Documents-wallpapers/*/scratchpad/phrases.json"
@@ -173,6 +179,13 @@ def check_obj(key, obj, errors):
     occ = str(obj.get("occasion", ""))
     if len(occ) > 160:
         errors.append(f"{key}.occasion: {len(occ)} символов, нужно до 160")
+    title = str(obj.get("occasion_title", ""))
+    if len(title) > 26:
+        errors.append(f"{key}.occasion_title: {len(title)} символов, нужно до 26")
+    if title and not occ:
+        errors.append(f"{key}: occasion_title без occasion — добавь и строку повода")
+    if obj.get("occasion_icon") and obj["occasion_icon"] not in ICONS:
+        errors.append(f"{key}.occasion_icon: {obj['occasion_icon']!r} — нужен один из {ICONS}")
     if missing:
         errors.append(f"{key}: нет полей {missing}")
     if extra:

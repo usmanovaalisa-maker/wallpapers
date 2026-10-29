@@ -22,7 +22,8 @@ def date_label(date):
     return f"{WEEKDAYS[d.weekday()]}, {d.day} {MONTHS[d.month - 1]}"
 
 
-def make_card(date, text, template="template.html", prefix=""):
+def make_card(date, text, template="template.html", prefix="", occasion=None):
+    """occasion — {"title": "День доброты", "icon": "heart"} для наклейки «Сегодня» (есть в новогоднем шаблоне)."""
     out = ROOT / "cards" / f"{prefix}{date}.jpg"
     out.parent.mkdir(exist_ok=True)
     with sync_playwright() as p:
@@ -32,7 +33,7 @@ def make_card(date, text, template="template.html", prefix=""):
         page.goto((ROOT / "scripts" / "card" / template).as_uri())
         page.evaluate("document.fonts.ready")
         seed = dt.date.fromisoformat(date).toordinal() % 233280  # конфетти каждый день раскладывается по-новому
-        page.evaluate("([t, d, s]) => fill(t, d, s)", [text, date_label(date), seed])
+        page.evaluate("([t, d, s, o]) => fill(t, d, s, o)", [text, date_label(date), seed, occasion])
         page.wait_for_timeout(200)
         page.screenshot(path=str(out), type="jpeg", quality=90)
         browser.close()
