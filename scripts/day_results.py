@@ -11,6 +11,7 @@
 а продажи и реализация подтягиваются частями (прибыль тогда выходит почти «минус реклама»). Если хотя бы
 за один день периода реализация меньше половины суммы заказов (MIN_REALISATION_SHARE; без заказов — продажи
 и реализация = 0) или дня нет в ответе, ready = False — рассылку в чаты не отправляем.
+Для группы артикулов (TRUESTATS_GROUP) выгрузка проверяется по магазинам без фильтра группы.
 
 Переменные окружения:
   TRUE_STATS            API-токен TrueStats (обязателен; без него напутствие уходит без цифр)
@@ -106,14 +107,14 @@ def truestats_account_ids(names):
     return ids
 
 
-def truestats(start, end, accounts=None, brands=None):
+def truestats(start, end, accounts=None, brands=None, use_group=True):
     """Заказы, сумма заказов, прибыль, продажи и реализация по дням из TrueStats
     (с фильтром по магазинам и/или группе артикулов; accounts — список ID вместо TRUESTATS_ACCOUNTS)."""
     key = os.environ.get("TRUE_STATS", "").strip()
     if not key:
         return None, {}, {}
     body = {"dateFrom": start.isoformat(), "dateTo": end.isoformat()}
-    group = os.environ.get("TRUESTATS_GROUP", "").strip()
+    group = os.environ.get("TRUESTATS_GROUP", "").strip() if use_group else ""
     filters = {}
     if group:
         filters["group"] = [truestats_group_id(group)]
@@ -218,9 +219,18 @@ def collect(today):
 
     # данные ещё не выгрузились: за день периода нет строки, реализация меньше половины суммы заказов
     # (или, если заказов нет, продажи и реализация = 0)
+    # Для группы артикулов (НГ) выгрузку проверяем по всем магазинам без фильтра группы: в сезонный
+    # пик у группы заказов много, а выкупов (реализации) за тот же день ещё мало — это не «не выгрузилось».
+    ready_total, ready_sold = total, sold
+    if got is not None and os.environ.get("TRUESTATS_GROUP", "").strip():
+        try:
+            ready_total, _, ready_sold = truestats(start, end, use_group=False)
+        except Exception as e:
+            errors.append(f"TrueStats (проверка выгрузки): {type(e).__name__}")
+
     def loaded(d):
-        sales, real = sold.get(d, (0.0, 0.0))
-        day_revenue = total.get(d, (0, 0.0))[1]
+        sales, real = ready_sold.get(d, (0.0, 0.0))
+        day_revenue = ready_total.get(d, (0, 0.0))[1]
         return real >= day_revenue * MIN_REALISATION_SHARE if day_revenue else bool(sales or real)
     not_loaded = [d.isoformat() for d in window(start) if got is not None and not loaded(d)]
     accounts = []
