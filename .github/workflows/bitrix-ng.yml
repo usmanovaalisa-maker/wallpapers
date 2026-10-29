@@ -68,6 +68,32 @@ jobs:
       - run: pip install playwright
         if: steps.check.outputs.skip != 'true'
 
+      # TrueStats выгружает вчерашний день с задержкой, а плановые запуски GitHub часто опаздывают на часы.
+      # Поэтому не ждём следующего запуска, а проверяем выгрузку каждые 15 минут до 19:00 по Самаре
+      # (минуты Actions для публичного репозитория бесплатны). Цифры в лог не выводятся.
+      - name: Ждём, пока TrueStats выгрузит вчерашний день
+        if: steps.check.outputs.skip != 'true' && !inputs.dry_run
+        timeout-minutes: 500
+        run: |
+          python - <<'PY'
+          import datetime as dt, os, sys, time
+          from zoneinfo import ZoneInfo
+          sys.path.insert(0, "scripts")
+          import day_results as dr
+          tz = ZoneInfo(os.environ.get("WISH_TZ") or "Europe/Samara")
+          while True:
+              today = dt.date.fromisoformat(os.environ["WISH_DATE"]) if os.environ.get("WISH_DATE") else dt.datetime.now(tz).date()
+              r = dr.collect(today)
+              if not r["sources"] or r.get("ready", True):
+                  print("Данные TrueStats готовы." if r["sources"] else "TrueStats недоступен — решит шаг отправки.")
+                  break
+              if dt.datetime.now(tz).hour >= 19:
+                  print("До 19:00 так и не выгрузилось — отправку отложит шаг отправки.")
+                  break
+              print(f"{dt.datetime.now(tz):%H:%M}: TrueStats ещё не выгрузил {', '.join(r['not_loaded'])} — проверю через 15 минут.")
+              time.sleep(900)
+          PY
+
       - name: Рисуем картинку дня
         id: card
         if: steps.check.outputs.skip != 'true'
