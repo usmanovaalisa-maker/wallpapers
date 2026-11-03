@@ -45,25 +45,20 @@ ACTIVE = ["ng"]
 MAIN_KEYS = ["record", "up", "steady", "support"]
 REACTION_KEYS = ["reaction_" + k for k in MAIN_KEYS]
 # необязательное поле: повод для радости этого дня — отдельной строкой в конце сообщения
-OPTIONAL_KEYS = ["occasion", "occasion_title", "occasion_icon"]
-ICONS = ["gift", "heart", "smile", "snowflake", "candy", "family", "tree", "star", "tea", "cake", "toy"]
-OCCASION_HINT = """Поле "occasion" (необязательное, до 160 символов): повод для радости ДАТЫ — найди веб-поиском
-праздники и памятные дни этой даты и возьми ОДИН, близкий бренду: подарки и сюрпризы (день подарков, сюрпризов,
-объятий, комплиментов, доброты, благодарности), тёплые семейные праздники и поводы для радости (день улыбки, мамы,
-папы, бабушек и дедушек, семьи, друзей, первый снег), детское (каникулы, сказки, игры, сладости, мороженое),
-новогоднее и зимнее (Дед Мороз, ёлка, мандарины, Рождество). Напиши 1–2 предложения: что за день и как его
-порадоваться, на «вы»/«команда», например: «Сегодня Всемирный день доброты — отличный повод сказать коллегам
-что-то приятное». Профессиональные дни, технологии, спорт, памятные и религиозные даты, политику, трагедии,
-болезни, чужие бренды и знаменитостей не бери. Если подходящего повода нет — поле не добавляй, ничего не выдумывай.
-Вместе с "occasion" добавь для наклейки на картинке: "occasion_title" — короткое название дня, до 26 символов
-(например «День доброты», «Всемирный день улыбки»), и "occasion_icon" — значок, один из: gift, heart, smile,
-snowflake, candy, family, tree, star, tea, cake, toy (подарки — gift, доброта/любовь — heart, улыбка/радость — smile,
-снег/зима — snowflake, сладости — candy, семья/бабушки/папы/мамы — family, Новый год/ёлка — tree, тёплые слова/мечты — star,
-чай — tea, день рождения/торт — cake, детское/игрушки — toy)."""
+OPTIONAL_KEYS = ["occasion", "occasion_title", "occasion_icon", "occasion_kind", "occasion_sources"]
+ICONS = ["gift", "heart", "smile", "snowflake", "candy", "family", "tree", "star", "tea", "cake", "toy", "pancakes"]
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 # Папки scratchpad сессий Claude, запущенных в этом репозитории
 SCRATCH_GLOB = "/private/tmp/claude-*/-Users-alisatitova-Documents-wallpapers/*/scratchpad/phrases.json"
 SIMILAR = 0.8
+
+JOY_HINT = """Повод нужен каждый календарный день. Для подтверждённого праздника укажи occasion_kind=holiday
+и occasion_sources — список URL проверенных страниц с этой датой. Не называй неофициальные праздники
+официальными или всемирными. Если подходящего праздника нет, выбери маленькую радость дня (чайная пауза,
+тёплые слова, семейная игра): occasion_kind=small_joy, occasion_sources=[]. Не выдавай идею за праздник.
+Заполни occasion (до 160 символов), occasion_title (до 26) и occasion_icon. Значок выбирай из:
+gift, heart, smile, snowflake, candy, family, tree, star, tea, cake, toy, pancakes.
+Рисунок уже встроен в шаблон и меняется по значку. Генерировать, скачивать или загружать картинки НЕ нужно."""
 
 
 def now():
@@ -75,7 +70,8 @@ def tomorrow():
 
 
 def git(*args, check=True):
-    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True,
+                       env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if check and r.returncode:
         sys.exit(f"git {' '.join(args)} — ошибка:\n{r.stdout}{r.stderr}")
     return r
@@ -93,9 +89,11 @@ def is_last_workday_of_month(day):
 
 
 def cmd_start():
+    if git("status", "--porcelain").stdout.strip():
+        sys.exit("В папке есть незавершённые изменения. Проверь их перед продолжением; start ничего не удалял.")
     git("fetch", "-q", "origin", "main")
     git("checkout", "-q", "main")
-    git("reset", "-q", "--hard", "origin/main")
+    git("merge", "-q", "--ff-only", "origin/main")
     stamp = now().strftime("%Y-%m-%d %H:%M:%S")
     (ROOT / ".github/last-local-run").write_text(stamp + "\n", encoding="utf-8")
 
@@ -106,10 +104,7 @@ def cmd_start():
           + (" — последний рабочий день месяца" if is_last_workday_of_month(day) else ""))
     data = {k: load(k) for k in FILES}
     cal = data["team"].get("calendar", {}).get(date)
-    if not cal:
-        print(f"{date} — не рабочий день (нет в calendar team.json): тексты не нужны — сразу publish.")
-        return
-    todo = [k for k in ACTIVE if date not in data[k].get("daily", {})]
+    todo = [k for k in ACTIVE if not prepared(data[k].get("daily", {}).get(date))]
     for k in ACTIVE:
         print(f"  {FILES[k]}: " + ("нужно написать" if k in todo else "уже есть — пропустить"))
     if cal:
@@ -119,7 +114,7 @@ def cmd_start():
         return
 
     if "ng" in todo:
-        print("\n" + OCCASION_HINT)
+        print("\n" + JOY_HINT)
     print(f"\nЧерновик сохрани инструментом Write в свою папку scratchpad как phrases.json, "
           f'с "date": "{date}" и ключами: {", ".join(todo)}. Затем: python3 scripts/daily_phrases.py add')
 
@@ -170,10 +165,27 @@ def find_draft(arg):
     return pathlib.Path(fresh[-1])
 
 
+def prepared(obj):
+    errors = []
+    check_obj("ng", obj, errors)
+    return not errors
+
+
 def check_obj(key, obj, errors):
     if not isinstance(obj, dict):
         errors.append(f"{key}: нужен объект с восемью полями (и необязательным occasion)")
         return
+    if key == "ng":
+        for field in ("occasion", "occasion_title", "occasion_icon"):
+            if not isinstance(obj.get(field), str) or not obj[field].strip():
+                errors.append(f"ng.{field}: нужно заполнить")
+        if obj.get("occasion_kind") not in ("holiday", "small_joy"):
+            errors.append("ng.occasion_kind: holiday или small_joy")
+        sources = obj.get("occasion_sources")
+        if not isinstance(sources, list) or not all(isinstance(s, str) and re.fullmatch(r"https?://[^\s]+", s) for s in sources):
+            errors.append("ng.occasion_sources: нужен список URL")
+        elif obj.get("occasion_kind") == "holiday" and not sources:
+            errors.append("Для праздника нужен источник с подтверждением даты")
     missing = [f for f in MAIN_KEYS + REACTION_KEYS if not str(obj.get(f, "")).strip()]
     extra = [f for f in obj if f not in MAIN_KEYS + REACTION_KEYS + OPTIONAL_KEYS]
     occ = str(obj.get("occasion", ""))
@@ -221,7 +233,7 @@ def cmd_add(arg):
         if k not in ACTIVE:
             warnings.append(f"{FILES[k]}: эта рассылка отключена — пропускаю")
             continue
-        if date in data[k].get("daily", {}):
+        if prepared(data[k].get("daily", {}).get(date)):
             warnings.append(f"{FILES[k]}: daily[{date}] уже есть — пропускаю")
             continue
         new[k] = draft[k]
@@ -247,9 +259,12 @@ def cmd_add(arg):
             check_obj(k, new[k], errors)
 
     # Похожесть: со всеми фразами трёх файлов и внутри черновика
-    old = [(norm(s), s) for k in FILES for s in strings(data[k]) if len(s) > 15]
+    old = [(norm(s), s) for k in FILES for day, obj in data[k].get("daily", {}).items()
+           if day != date for s in strings(obj) if len(s) > 15]
+    old += [(norm(s), s) for k in FILES for section, obj in data[k].items()
+            if section != "daily" for s in strings(obj) if len(s) > 15]
     seen = []
-    for s in (x for k in new for x in strings(new[k])):
+    for s in (str(new[k][f]) for k in new for f in MAIN_KEYS + REACTION_KEYS + ["occasion"] if f in new[k]):
         n = norm(s)
         for on, o in old + seen:
             sm = difflib.SequenceMatcher(None, n, on)
@@ -269,6 +284,8 @@ def cmd_add(arg):
             print("  - " + e)
         sys.exit(1)
 
+    originals = {k: (ROOT / FILES[k]).read_bytes() for k in new}
+
     if "fans" in new:
         # fans.json не пересериализуем: вставляем блок текстом в конец daily (последний ключ файла)
         p = ROOT / FILES["fans"]
@@ -286,7 +303,8 @@ def cmd_add(arg):
                                          encoding="utf-8")
 
     def rollback(msg):
-        git("checkout", "--", *FILES.values())
+        for k, original in originals.items():
+            (ROOT / FILES[k]).write_bytes(original)
         sys.exit(msg + "\nИзменения в wishes/ откатил.")
 
     for k in FILES:
@@ -314,9 +332,39 @@ def cmd_add(arg):
     print("Дальше: python3 scripts/daily_phrases.py publish")
 
 
+def cmd_preview(date=None):
+    from make_card import make_card
+    date = date or tomorrow()
+    obj = load("ng").get("daily", {}).get(date)
+    if not prepared(obj):
+        sys.exit("Нет полного комплекта текстов и повода на эту дату")
+    for level in MAIN_KEYS:
+        path = ROOT / ".local/previews" / f"{date}-{level}.jpg"
+        make_card(date, obj["reaction_" + level], "template_ng.html", "ng-",
+                  {"title": obj["occasion_title"], "icon": obj["occasion_icon"]}, output=path)
+        print(path)
+
+
+def cmd_bundle():
+    obj = load("ng").get("daily", {}).get(tomorrow())
+    if not prepared(obj):
+        sys.exit("Нет полного комплекта на завтра")
+    import shutil
+    out = ROOT / ".local/web-upload/ng.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / FILES["ng"], out)
+    print(out)
+    print("GitHub: upload/main/wishes. Загрузить только ng.json, затем сверить origin/main.")
+
+
 def cmd_publish():
     date = tomorrow()
-    git("add", ".github/last-local-run", "wishes")
+    if not prepared(load("ng").get("daily", {}).get(date)):
+        sys.exit("Нет полного комплекта текстов и повода на завтра")
+    allowed = {".github/last-local-run", FILES["ng"]}
+    if set(git("diff", "--cached", "--name-only").stdout.splitlines()) - allowed:
+        sys.exit("Есть посторонние подготовленные изменения — публикация остановлена")
+    git("add", ".github/last-local-run", FILES["ng"])
     changed = git("diff", "--cached", "--name-only").stdout.split()
     if not changed:
         sys.exit("Нечего коммитить: сначала python3 scripts/daily_phrases.py start")
@@ -329,7 +377,9 @@ def cmd_publish():
                   "GitHub Actions запустит сегодняшние рассылки.")
             return
         print(f"Push отклонён (попытка {attempt}): {r.stderr.strip()[-300:]}")
-        git("pull", "-q", "--rebase", "origin", "main", check=False)
+        if "Authentication failed" in r.stderr or "Invalid username or token" in r.stderr:
+            sys.exit("Нужен вход в Git. Материалы сохранены; можно загрузить ng.json через авторизованный браузер.")
+        git("pull", "-q", "--rebase", "origin", "main")
     sys.exit("Push не прошёл за 4 попытки")
 
 
@@ -341,5 +391,9 @@ if __name__ == "__main__":
         cmd_add(sys.argv[2] if len(sys.argv) > 2 else None)
     elif cmd == "publish":
         cmd_publish()
+    elif cmd == "preview":
+        cmd_preview(sys.argv[2] if len(sys.argv) > 2 else None)
+    elif cmd == "bundle":
+        cmd_bundle()
     else:
         sys.exit(__doc__)
