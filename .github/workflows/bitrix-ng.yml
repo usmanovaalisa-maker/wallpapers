@@ -3,8 +3,8 @@ name: Новогодний сезон в Битрикс24 (чат «НГ 2026-20
 on:
   schedule:
     # Каждый час с 10:17 до 19:17 по Самаре (06:17–15:17 UTC). GitHub часто опаздывает или пропускает
-    # плановые запуски (особенно ровно в :00), поэтому попыток много и минуты нечётные. Пока TrueStats
-    # не выгрузил вчера (реализация < 50% суммы заказов), рассылка откладывается до следующего часа;
+    # плановые запуски (особенно ровно в :00), поэтому попыток много и минуты нечётные. Пока таблица
+    # не обновлена за вчерашний день, рассылка откладывается до следующего часа;
     # после отправки остальные запуски ничего не делают — см. шаг «Уже отправляли сегодня?»
     - cron: "17 6-15 * * *"
   # Запуск с компьютера: локальная задача Claude в 11:30 пушит фразы на завтра и отметку
@@ -41,11 +41,11 @@ jobs:
       CARD_TEMPLATE: template_ng.html
       CARD_PREFIX: ng-
       MESSAGE_TITLE: "🎄 Новогодний сезон: итоги дня"
-      # Итоги только по группе артикулов TrueStats; цифры не пишутся ни в лог, ни в репозиторий
-      TRUE_STATS: ${{ secrets.TRUE_STATS }}
-      TRUESTATS_GROUP: ${{ vars.NG_TRUESTATS_GROUP || 'НГ26-27/Новый год 2027' }}
-      SEASON_START: ${{ vars.NG_SEASON_START || '2026-09-01' }}
-      STATS_LABEL: "по НГ-коллекции"
+      # Адрес таблицы и финансовые показатели не раскрываются в публичном репозитории/логе.
+      RESULTS_SOURCE: google_sheet
+      NG_SHEETS_URL: ${{ secrets.NG_SHEETS_URL }}
+      NG_SHEETS_GID: "1887142559"
+      NG_SHEETS_SEASON: "НГ 2027"
     steps:
       - uses: actions/checkout@v5
 
@@ -68,10 +68,9 @@ jobs:
       - run: pip install playwright
         if: steps.check.outputs.skip != 'true'
 
-      # TrueStats выгружает вчерашний день с задержкой, а плановые запуски GitHub часто опаздывают на часы.
-      # Поэтому не ждём следующего запуска, а проверяем выгрузку каждые 15 минут до 19:00 по Самаре
+      # Проверяем готовность вкладки «Свод по дням» каждые 15 минут до 19:00 по Самаре.
       # (минуты Actions для публичного репозитория бесплатны). Цифры в лог не выводятся.
-      - name: Ждём, пока TrueStats выгрузит вчерашний день
+      - name: Ждём обновления таблицы за вчерашний день
         if: steps.check.outputs.skip != 'true' && !inputs.dry_run
         timeout-minutes: 500
         run: |
@@ -84,13 +83,13 @@ jobs:
           while True:
               today = dt.date.fromisoformat(os.environ["WISH_DATE"]) if os.environ.get("WISH_DATE") else dt.datetime.now(tz).date()
               r = dr.collect(today)
-              if not r["sources"] or r.get("ready", True):
-                  print("Данные TrueStats готовы." if r["sources"] else "TrueStats недоступен — решит шаг отправки.")
+              if r.get("ready", False):
+                  print("Таблица обновлена, данные готовы.")
                   break
               if dt.datetime.now(tz).hour >= 19:
                   print("До 19:00 так и не выгрузилось — отправку отложит шаг отправки.")
                   break
-              print(f"{dt.datetime.now(tz):%H:%M}: TrueStats ещё не выгрузил {', '.join(r['not_loaded'])} — проверю через 15 минут.")
+              print(f"{dt.datetime.now(tz):%H:%M}: таблица не готова за {', '.join(r['not_loaded'])} — проверю через 15 минут.")
               time.sleep(900)
           PY
 

@@ -193,13 +193,14 @@ def main():
     results, stats = day_results(date, data)
     if not results.get("ready", True):
         days = ", ".join(dt.date.fromisoformat(d).strftime("%d.%m") for d in results["not_loaded"])
-        print(f"::warning::TrueStats ещё не выгрузил {days} (реализация меньше половины суммы заказов) — в чат не отправляем, "
-              "попробует следующий запуск.")
+        sheet_mode = results.get("source_type") == "google_sheet"
+        reason = ("Таблица не готова: " + "; ".join(results.get("errors", []))) if sheet_mode else \
+                 f"TrueStats ещё не выгрузил {days} (реализация меньше половины суммы заказов)"
+        print(f"::warning::{reason} — в чат не отправляем, попробует следующий запуск.")
         # повторы идут каждый час — о задержке пишем владельцу только с 17:00, когда это уже необычно
         hour = dt.datetime.now(ZoneInfo(os.environ.get("WISH_TZ") or "Europe/Samara")).hour
         if os.environ.get("CARD") != "1" and hour >= 17:
-            send_control(results, f"⚠️ НЕ отправлено: TrueStats ещё не выгрузил {days} (реализация меньше половины суммы заказов). "
-                                  "Следующий запуск по расписанию попробует снова.")
+            send_control(results, f"⚠️ НЕ отправлено: {reason}. Следующий запуск по расписанию попробует снова.")
         return
     text = todays_text(date, results["level"], data)
     # пожелание идёт в сообщение (после цифр) и одно — на картинку; без итогов на картинке основной текст

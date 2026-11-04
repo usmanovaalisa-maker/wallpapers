@@ -1,4 +1,7 @@
-"""Итоги прошедшего дня для рассылок в Битрикс24 — только из TrueStats.
+"""Итоги прошедшего дня для рассылок в Битрикс24.
+
+Для новогодней рассылки RESULTS_SOURCE=google_sheet: данные выбранной таблицы,
+см. sheet_results.py. Остальные рассылки используют прежний режим TrueStats.
 
 Репозиторий публичный, поэтому цифры никуда не сохраняются и не печатаются в лог —
 они попадают только в сообщение в Битрикс24 и в контрольную копию владельцу (control_text).
@@ -189,6 +192,9 @@ def period(today):
 
 
 def collect(today):
+    if os.environ.get("RESULTS_SOURCE") == "google_sheet":
+        from sheet_results import collect as collect_sheet
+        return collect_sheet(today)
     start, end = period(today)
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []
@@ -314,6 +320,9 @@ def brands_line(r, top=3):
 
 def stats_line(r):
     """Строка с цифрами для сообщения в чат (не для картинки и не для лога)."""
+    if r.get("source_type") == "google_sheet":
+        from sheet_results import stats_line as sheet_stats_line
+        return sheet_stats_line(r)
     lines = []
     if r.get("sources") and r.get("orders"):
         dm = lambda d: dt.date.fromisoformat(d).strftime("%d.%m")
@@ -350,6 +359,9 @@ LEVELS = {"record": "рекорд", "up": "рост", "steady": "стабиль�
 
 def control_text(r):
     """Разбивка для сверки с TrueStats — только в личную контрольную копию, не в чат и не в лог."""
+    if r.get("source_type") == "google_sheet":
+        from sheet_results import control_text as sheet_control_text
+        return sheet_control_text(r)
     num = lambda n: f"{round(n or 0):,}".replace(",", "\u00a0")
     dm = lambda d: dt.date.fromisoformat(d).strftime("%d.%m")
     flt = [f"магазины «{os.environ['TRUESTATS_ACCOUNTS'].strip()}»"] if os.environ.get("TRUESTATS_ACCOUNTS", "").strip() else []
