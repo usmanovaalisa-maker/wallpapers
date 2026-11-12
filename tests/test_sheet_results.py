@@ -68,6 +68,18 @@ class SheetResultsTests(unittest.TestCase):
         self.assertNotIn("заказов на", message)  # Количество заказов в источнике не дано.
         self.assertIn("02.11.2026", message)  # Накопительный итог — только за фактический период.
 
+    def test_profit_label_matches_updated_sheet_without_changing_values(self):
+        rows = fixture()
+        rows[4][10] = "Чистая прибыль, ₽"
+        result = sheet.collect(TODAY, as_csv(rows))
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["marketplaces"]["ozon"]["profit"], -30)
+        message = sheet.stats_line(result)
+        self.assertIn("чистая прибыль: −30 ₽", message)
+        self.assertNotIn("без опер.", message)
+        rows[4][10] = "Валовая прибыль, ₽"
+        self.assertFalse(sheet.collect(TODAY, as_csv(rows))["ready"])
+
     def test_zeros_are_data_and_empty_buyout_is_not_zero_percent(self):
         rows = fixture()
         rows[-1] = ["03.11.26"] + ["0"] * 6 + [""] * 3 + ["0"] * 3

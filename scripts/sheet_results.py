@@ -132,9 +132,13 @@ def parse(text, today):
     rows = [row + [""] * max(0, 13 - len(row)) for row in csv.reader(io.StringIO(text))]
     if len(rows) < 7 or rows[5][:4] != ["Дата", "Итого", "ВБ", "Озон"]:
         raise SheetError("Не совпала структура вкладки «Свод по дням»")
-    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %", 10: "Прибыль без опер. расх., ₽"}
+    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %"}
     if any(rows[4][column].strip() != name for column, name in expected.items()):
         raise SheetError("Изменились заголовки показателей таблицы")
+    profit_labels = {"Прибыль без опер. расх., ₽": "Прибыль без опер. расходов", "Чистая прибыль, ₽": "Чистая прибыль"}
+    profit_label = profit_labels.get(rows[4][10].strip())
+    if not profit_label:
+        raise SheetError("Изменился заголовок прибыли в таблице")
     for column in (4, 7, 10):
         if rows[5][column:column + 3] != ["Итого", "ВБ", "Озон"]:
             raise SheetError("Изменился порядок маркетплейсов в таблице")
@@ -185,6 +189,7 @@ def parse(text, today):
             "sources": ["Google Sheets — «Свод по дням»"], "errors": [], "ready": True, "not_loaded": [],
             "level": level, "start": yesterday.isoformat(), "end": yesterday.isoformat(), "days": 1,
             "orders": None, "revenue": float(amount), "profit": float(current["total"]["profit"]),
+            "profit_label": profit_label,
             "prev_revenue": float(previous["total"]["orders_amount"]) if previous else None,
             "prev_start": previous_date.isoformat(),
             "marketplaces": {key: {k: float(v) if v is not None else None for k, v in values.items()}
@@ -219,12 +224,13 @@ def stats_line(result):
     if not result.get("ready"):
         return ""
     day = dt.date.fromisoformat(result["end"]).strftime("%d.%m.%Y")
+    profit_label = result.get("profit_label", "Прибыль без опер. расходов").lower()
     lines = [f"Итоги по новогодке за {day}:"]
     for key, label, _ in MARKETS:
         values = result["marketplaces"][key]
         lines += ["", f"[B]{label}[/B]",
                   f"Заказы: {money(values['orders_amount'])}; продажи: {money(values['sales'])}.",
-                  f"Выкуп: {percentage(values['buyout'])}; прибыль без опер. расходов: {money(values['profit'])}."]
+                  f"Выкуп: {percentage(values['buyout'])}; {profit_label}: {money(values['profit'])}."]
     if result.get("prev_revenue") is not None and result["prev_revenue"] > 0:
         delta = (result["revenue"] / result["prev_revenue"] - 1) * 100
         previous_day = dt.date.fromisoformat(result["prev_start"]).strftime("%d.%m")
