@@ -62,9 +62,9 @@ def read_csv():
         raise SheetError("Некорректный номер вкладки")
     base = "https://docs.google.com/spreadsheets/d/" + match[1]
     formatted = fetch(base + "/export?" + urllib.parse.urlencode(
-        {"format": "csv", "gid": gid, "range": "A1:M1000"}))
+        {"format": "csv", "gid": gid, "range": "A1:P1000"}))
     raw = fetch(base + "/gviz/tq?" + urllib.parse.urlencode(
-        {"gid": gid, "headers": "0", "range": "A7:M1000", "tqx": "out:json"}))
+        {"gid": gid, "headers": "0", "range": "A7:P1000", "tqx": "out:json"}))
     return precise_csv(formatted, raw)
 
 
@@ -88,7 +88,7 @@ def precise_csv(formatted, raw):
         body = raw if raw.lstrip().startswith("{") else raw[raw.index("(") + 1:raw.rindex(")")]
         payload = json.loads(body, parse_float=Decimal)
         table = payload["table"]
-        if payload["status"] != "ok" or [c["type"] for c in table["cols"]] != ["date"] + ["number"] * 12:
+        if payload["status"] != "ok" or [c["type"] for c in table["cols"]] != ["date"] + ["number"] * 15:
             raise ValueError
         values = {}
         for row in table["rows"]:
@@ -101,7 +101,7 @@ def precise_csv(formatted, raw):
             date = dt.date(year, month + 1, day)
             if date in values:
                 raise ValueError
-            values[date] = [str(cell["v"]) if cell and cell.get("v") is not None else "" for cell in cells[1:13]]
+            values[date] = [str(cell["v"]) if cell and cell.get("v") is not None else "" for cell in cells[1:16]]
         rows = list(csv.reader(io.StringIO(formatted)))
         seen = set()
         for row in rows[6:]:
@@ -109,15 +109,15 @@ def precise_csv(formatted, raw):
             if date is None:
                 continue
             exact = values.get(date)
-            if exact is None or len(exact) != 12:
+            if exact is None or len(exact) != 15:
                 raise ValueError
             for i, value in enumerate(exact, 1):
                 screen = number(row[i], percent=7 <= i <= 9)
                 precise = number(value, percent=7 <= i <= 9)
-                tolerance = Decimal("0.00051") if 7 <= i <= 9 else Decimal("0.51")
+                tolerance = Decimal("0.00051") if 7 <= i <= 9 or 13 <= i <= 15 else Decimal("0.51")
                 if (screen is None) != (precise is None) or (screen is not None and abs(screen - precise) > tolerance):
                     raise ValueError
-            row[1:13] = exact
+            row[1:16] = exact
             seen.add(date)
         if seen != set(values):
             raise ValueError
@@ -129,17 +129,17 @@ def precise_csv(formatted, raw):
 
 
 def parse(text, today):
-    rows = [row + [""] * max(0, 13 - len(row)) for row in csv.reader(io.StringIO(text))]
+    rows = [row + [""] * max(0, 16 - len(row)) for row in csv.reader(io.StringIO(text))]
     if len(rows) < 7 or rows[5][:4] != ["Дата", "Итого", "ВБ", "Озон"]:
         raise SheetError("Не совпала структура вкладки «Свод по дням»")
-    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %"}
+    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %", 13: "Чистая маржа, %"}
     if any(rows[4][column].strip() != name for column, name in expected.items()):
         raise SheetError("Изменились заголовки показателей таблицы")
     profit_labels = {"Прибыль без опер. расх., ₽": "Прибыль без опер. расходов", "Чистая прибыль, ₽": "Чистая прибыль"}
     profit_label = profit_labels.get(rows[4][10].strip())
     if not profit_label:
         raise SheetError("Изменился заголовок прибыли в таблице")
-    for column in (4, 7, 10):
+    for column in (4, 7, 10, 13):
         if rows[5][column:column + 3] != ["Итого", "ВБ", "Озон"]:
             raise SheetError("Изменился порядок маркетплейсов в таблице")
     if rows[2][1].strip() != os.environ.get("NG_SHEETS_SEASON", "НГ 2027"):
@@ -159,7 +159,8 @@ def parse(text, today):
         markets = {}
         for key, label, column in MARKETS:
             values = {"orders_amount": number(row[column]), "sales": number(row[column + 3]),
-                      "buyout": number(row[column + 6], percent=True), "profit": number(row[column + 9])}
+                      "buyout": number(row[column + 6], percent=True), "profit": number(row[column + 9]),
+                      "margin": number(row[column + 12])}
             if any(values[k] is None for k in ("orders_amount", "sales", "profit")):
                 raise SheetError("Не заполнены денежные показатели за один из дней")
             markets[key] = values
@@ -217,7 +218,7 @@ def money(value):
 
 
 def percentage(value):
-    return "нет данных" if value is None else f"{value * 100:.1f}".replace(".", ",") + "%"
+    return "нет данных" if value is None else f"{value * 100:.1f}".replace(".", ",").replace("-", "−") + "%"
 
 
 def stats_line(result):
@@ -230,7 +231,7 @@ def stats_line(result):
         values = result["marketplaces"][key]
         lines += ["", f"[B]{label}[/B]",
                   f"Заказы: {money(values['orders_amount'])}; продажи: {money(values['sales'])}.",
-                  f"Выкуп: {percentage(values['buyout'])}; {profit_label}: {money(values['profit'])}."]
+                  f"Выкуп: {percentage(values['buyout'])}; {profit_label}: {money(values['profit'])} (маржинальность: {percentage(values['margin'])})."]
     if result.get("prev_revenue") is not None and result["prev_revenue"] > 0:
         delta = (result["revenue"] / result["prev_revenue"] - 1) * 100
         previous_day = dt.date.fromisoformat(result["prev_start"]).strftime("%d.%m")

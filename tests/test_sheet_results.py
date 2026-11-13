@@ -19,10 +19,10 @@ TODAY = dt.date(2026, 11, 4)
 def fixture():
     return [["Свод ВБ + Озон: динамика по дням"], ["Новогодка"],
             ["Сезон", "НГ 2027", "", "", "Текущий сезон: данные по 03.11.2026"], ["Описание"],
-            ["", "Заказы, ₽", "", "", "Продажи, ₽", "", "", "Выкуп, %", "", "", "Прибыль без опер. расх., ₽", "", ""],
-            ["Дата"] + ["Итого", "ВБ", "Озон"] * 4,
-            ["02.11.26", "900", "700", "200", "500", "400", "100", "80%", "75%", "100%", "70", "80", "−10"],
-            ["03.11.26", "1\u00a0000", "750", "250", "600", "450", "150", "82,9%", "83,0%", "78,6%", "90", "120", "−30"]]
+            ["", "Заказы, ₽", "", "", "Продажи, ₽", "", "", "Выкуп, %", "", "", "Прибыль без опер. расх., ₽", "", "", "Чистая маржа, %", "", ""],
+            ["Дата"] + ["Итого", "ВБ", "Озон"] * 5,
+            ["02.11.26", "900", "700", "200", "500", "400", "100", "80%", "75%", "100%", "70", "80", "−10", "14%", "20%", "−10%"],
+            ["03.11.26", "1\u00a0000", "750", "250", "600", "450", "150", "82,9%", "83,0%", "78,6%", "90", "120", "−30", "12,7%", "20%", "−40%"]]
 
 
 def as_csv(rows):
@@ -42,13 +42,15 @@ class SheetResultsTests(unittest.TestCase):
             raw_rows.append({"c": cells})
         raw_rows[-1]["c"][1]["v"] = 1000.12
         raw_rows[-1]["c"][2]["v"] = 750.12
-        payload = {"status": "ok", "table": {"cols": [{"type": "date"}] + [{"type": "number"}] * 12,
+        raw_rows[-1]["c"][13]["v"] = .127145
+        payload = {"status": "ok", "table": {"cols": [{"type": "date"}] + [{"type": "number"}] * 15,
                                                "rows": raw_rows}}
         callback = "/*O_o*/\ngoogle.visualization.Query.setResponse(" + json.dumps(payload) + ");"
         text = sheet.precise_csv(as_csv(rows), callback)
         result = sheet.collect(TODAY, text)
         self.assertTrue(result["ready"])
         self.assertEqual(result["period_orders_amount"]["total"], 1900.12)
+        self.assertEqual(result["marketplaces"]["total"]["margin"], .127145)
         raw_rows[-1]["c"][1]["v"] = 1100
         with self.assertRaises(sheet.SheetError):
             sheet.precise_csv(as_csv(rows), json.dumps(payload))
@@ -80,9 +82,33 @@ class SheetResultsTests(unittest.TestCase):
         rows[4][10] = "Валовая прибыль, ₽"
         self.assertFalse(sheet.collect(TODAY, as_csv(rows))["ready"])
 
+    def test_margin_is_read_per_marketplace_and_placed_after_profit(self):
+        rows = fixture()
+        result = sheet.collect(TODAY, as_csv(rows))
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["marketplaces"]["total"]["margin"], .127)
+        self.assertEqual(result["marketplaces"]["wb"]["margin"], .20)
+        self.assertEqual(result["marketplaces"]["ozon"]["margin"], -.40)
+        message = sheet.stats_line(result)
+        self.assertIn("90 ₽ (маржинальность: 12,7%)", message)
+        self.assertIn("−30 ₽ (маржинальность: −40,0%)", message)
+        rows[-1][13:16] = ["0%", "", "−200%"]
+        result = sheet.collect(TODAY, as_csv(rows))
+        self.assertTrue(result["ready"])
+        self.assertIn("маржинальность: 0,0%", sheet.stats_line(result))
+        self.assertIn("маржинальность: нет данных", sheet.stats_line(result))
+        self.assertIn("маржинальность: −200,0%", sheet.stats_line(result))
+        for kind in ("header", "order", "formula"):
+            rows = fixture()
+            if kind == "header": rows[4][13] = "ДРР, %"
+            if kind == "order": rows[5][14] = "Озон"
+            if kind == "formula": rows[-1][15] = "#DIV/0!"
+            with self.subTest(kind=kind):
+                self.assertFalse(sheet.collect(TODAY, as_csv(rows))["ready"])
+
     def test_zeros_are_data_and_empty_buyout_is_not_zero_percent(self):
         rows = fixture()
-        rows[-1] = ["03.11.26"] + ["0"] * 6 + [""] * 3 + ["0"] * 3
+        rows[-1] = ["03.11.26"] + ["0"] * 6 + [""] * 3 + ["0"] * 3 + [""] * 3
         result = sheet.collect(TODAY, as_csv(rows))
         self.assertTrue(result["ready"])
         self.assertIn("Заказы: 0 ₽", sheet.stats_line(result))
