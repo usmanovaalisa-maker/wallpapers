@@ -194,7 +194,17 @@ def period(today):
 def collect(today):
     if os.environ.get("RESULTS_SOURCE") == "google_sheet":
         from sheet_results import collect as collect_sheet
-        return collect_sheet(today)
+        result = collect_sheet(today)
+        if result["ready"] and os.environ.get("NG_CORPORATE_PROFIT") == "1":
+            from corporate_profit import collect as collect_corporate, CorporateProfitError
+            try:
+                result["corporate_profit"] = collect_corporate(today)
+                result["sources"].append("TrueStats — прибыль для корпоратива")
+            except CorporateProfitError as error:
+                result["ready"] = False
+                result["errors"].append("Итог на корпоратив: " + str(error))
+                result["not_loaded"] = [today.isoformat()]
+        return result
     start, end = period(today)
     first = end - dt.timedelta(days=HISTORY_DAYS)
     total, sources, errors = {}, [], []

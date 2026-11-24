@@ -229,6 +229,9 @@ def main():
     occasion = todays_occasion(date, data)
     if occasion:
         text += f"\n\n🎁 [B]Повод для радости[/B]: {occasion}"
+    if results.get("corporate_profit"):
+        from corporate_profit import footer
+        text += "\n\n" + footer(results)
     webhook = normalize_webhook(os.environ.get("BITRIX_WEBHOOK_URL", ""))
     if not webhook:
         print("::warning::Не задан секрет BITRIX_WEBHOOK_URL — сообщение не отправлено.")

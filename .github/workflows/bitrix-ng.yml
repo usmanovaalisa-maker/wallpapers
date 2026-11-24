@@ -46,6 +46,9 @@ jobs:
       NG_SHEETS_URL: ${{ secrets.NG_SHEETS_URL }}
       NG_SHEETS_GID: "1887142559"
       NG_SHEETS_SEASON: "НГ 2027"
+      # Только для финальной шутки: прибыль двух WB-артикулов с 1 сентября.
+      NG_CORPORATE_PROFIT: "1"
+      TRUE_STATS: ${{ secrets.TRUE_STATS }}
     steps:
       - uses: actions/checkout@v5
 

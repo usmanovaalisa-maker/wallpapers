@@ -132,12 +132,13 @@ def parse(text, today):
     rows = [row + [""] * max(0, 16 - len(row)) for row in csv.reader(io.StringIO(text))]
     if len(rows) < 7 or rows[5][:4] != ["Дата", "Итого", "ВБ", "Озон"]:
         raise SheetError("Не совпала структура вкладки «Свод по дням»")
-    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %", 13: "Чистая маржа, %"}
+    expected = {1: "Заказы, ₽", 4: "Продажи, ₽", 7: "Выкуп, %"}
     if any(rows[4][column].strip() != name for column, name in expected.items()):
         raise SheetError("Изменились заголовки показателей таблицы")
-    profit_labels = {"Прибыль без опер. расх., ₽": "Прибыль без опер. расходов", "Чистая прибыль, ₽": "Чистая прибыль"}
-    profit_label = profit_labels.get(rows[4][10].strip())
-    if not profit_label:
+    if rows[4][13].strip() not in ("Чистая маржа, %", "Маржа, %"):
+        raise SheetError("Изменился заголовок маржи в таблице")
+    profit_headers = ("Прибыль без опер. расх., ₽", "Чистая прибыль, ₽", "Валовая прибыль, ₽")
+    if rows[4][10].strip() not in profit_headers:
         raise SheetError("Изменился заголовок прибыли в таблице")
     for column in (4, 7, 10, 13):
         if rows[5][column:column + 3] != ["Итого", "ВБ", "Озон"]:
@@ -190,7 +191,7 @@ def parse(text, today):
             "sources": ["Google Sheets — «Свод по дням»"], "errors": [], "ready": True, "not_loaded": [],
             "level": level, "start": yesterday.isoformat(), "end": yesterday.isoformat(), "days": 1,
             "orders": None, "revenue": float(amount), "profit": float(current["total"]["profit"]),
-            "profit_label": profit_label,
+            "profit_label": "Валовая прибыль", "source_profit_header": rows[4][10].strip(),
             "prev_revenue": float(previous["total"]["orders_amount"]) if previous else None,
             "prev_start": previous_date.isoformat(),
             "marketplaces": {key: {k: float(v) if v is not None else None for k, v in values.items()}
@@ -225,13 +226,13 @@ def stats_line(result):
     if not result.get("ready"):
         return ""
     day = dt.date.fromisoformat(result["end"]).strftime("%d.%m.%Y")
-    profit_label = result.get("profit_label", "Прибыль без опер. расходов").lower()
+    profit_label = "Валовая прибыль"
     lines = [f"Итоги по новогодке за {day}:"]
     for key, label, _ in MARKETS:
         values = result["marketplaces"][key]
         lines += ["", f"[B]{label}[/B]",
                   f"Заказы: {money(values['orders_amount'])}; продажи: {money(values['sales'])}.",
-                  f"Выкуп: {percentage(values['buyout'])}; {profit_label}: {money(values['profit'])} (маржинальность: {percentage(values['margin'])})."]
+                  f"Выкуп: {percentage(values['buyout'])}; {profit_label}: {money(values['profit'])} (Маржа: {percentage(values['margin'])})."]
     if result.get("prev_revenue") is not None and result["prev_revenue"] > 0:
         delta = (result["revenue"] / result["prev_revenue"] - 1) * 100
         previous_day = dt.date.fromisoformat(result["prev_start"]).strftime("%d.%m")
@@ -250,6 +251,12 @@ def control_text(result):
         return "\n".join(lines + ["Отправка отложена: " + "; ".join(result["errors"])])
     lines += ["Показатели взяты из ячеек таблицы; заказы — сумма в рублях.", stats_line(result), "",
               f"Уровень текста: {result['level']} (по общей сумме заказов)."]
+    if result.get("corporate_profit"):
+        from corporate_profit import footer
+        corporate = result["corporate_profit"]
+        lines += ["", footer(result),
+                  f"Корпоратив: TrueStats, WB 261657089 и 44713360; {corporate['start']}…{corporate['end']} включительно, прибыль без операционных расходов.",
+                  "Текущий день учитывается по фактически доступным данным на момент чтения."]
     if not result.get("period_orders_amount"):
         lines.append("В истории есть пропуски: накопительная сумма не показана.")
     return "\n".join(lines)

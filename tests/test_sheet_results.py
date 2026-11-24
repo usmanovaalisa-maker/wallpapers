@@ -70,16 +70,20 @@ class SheetResultsTests(unittest.TestCase):
         self.assertNotIn("заказов на", message)  # Количество заказов в источнике не дано.
         self.assertIn("02.11.2026", message)  # Накопительный итог — только за фактический период.
 
-    def test_profit_label_matches_updated_sheet_without_changing_values(self):
+    def test_current_and_legacy_headers_preserve_values_with_requested_labels(self):
         rows = fixture()
-        rows[4][10] = "Чистая прибыль, ₽"
-        result = sheet.collect(TODAY, as_csv(rows))
-        self.assertTrue(result["ready"])
-        self.assertEqual(result["marketplaces"]["ozon"]["profit"], -30)
-        message = sheet.stats_line(result)
-        self.assertIn("чистая прибыль: −30 ₽", message)
-        self.assertNotIn("без опер.", message)
-        rows[4][10] = "Валовая прибыль, ₽"
+        for header in ("Чистая прибыль, ₽", "Валовая прибыль, ₽", "Прибыль без опер. расх., ₽"):
+            rows[4][10] = header
+            rows[4][13] = "Маржа, %"
+            with self.subTest(header=header):
+                result = sheet.collect(TODAY, as_csv(rows))
+                self.assertTrue(result["ready"])
+                self.assertEqual(result["marketplaces"]["ozon"]["profit"], -30)
+                message = sheet.stats_line(result)
+                self.assertIn("Валовая прибыль: −30 ₽ (Маржа: −40,0%)", message)
+                self.assertNotIn("чистая прибыль", message.lower())
+                self.assertNotIn("маржинальность", message.lower())
+        rows[4][10] = "Неизвестная прибыль, ₽"
         self.assertFalse(sheet.collect(TODAY, as_csv(rows))["ready"])
 
     def test_margin_is_read_per_marketplace_and_placed_after_profit(self):
@@ -90,14 +94,14 @@ class SheetResultsTests(unittest.TestCase):
         self.assertEqual(result["marketplaces"]["wb"]["margin"], .20)
         self.assertEqual(result["marketplaces"]["ozon"]["margin"], -.40)
         message = sheet.stats_line(result)
-        self.assertIn("90 ₽ (маржинальность: 12,7%)", message)
-        self.assertIn("−30 ₽ (маржинальность: −40,0%)", message)
+        self.assertIn("90 ₽ (Маржа: 12,7%)", message)
+        self.assertIn("−30 ₽ (Маржа: −40,0%)", message)
         rows[-1][13:16] = ["0%", "", "−200%"]
         result = sheet.collect(TODAY, as_csv(rows))
         self.assertTrue(result["ready"])
-        self.assertIn("маржинальность: 0,0%", sheet.stats_line(result))
-        self.assertIn("маржинальность: нет данных", sheet.stats_line(result))
-        self.assertIn("маржинальность: −200,0%", sheet.stats_line(result))
+        self.assertIn("Маржа: 0,0%", sheet.stats_line(result))
+        self.assertIn("Маржа: нет данных", sheet.stats_line(result))
+        self.assertIn("Маржа: −200,0%", sheet.stats_line(result))
         for kind in ("header", "order", "formula"):
             rows = fixture()
             if kind == "header": rows[4][13] = "ДРР, %"
@@ -113,7 +117,7 @@ class SheetResultsTests(unittest.TestCase):
         self.assertTrue(result["ready"])
         self.assertIn("Заказы: 0 ₽", sheet.stats_line(result))
         self.assertIn("Выкуп: нет данных", sheet.stats_line(result))
-        self.assertIn("прибыль без опер. расходов: 0 ₽", sheet.stats_line(result))
+        self.assertIn("Валовая прибыль: 0 ₽", sheet.stats_line(result))
 
     def test_bad_sources_do_not_fall_back_to_truestats(self):
         with patch.dict(os.environ, {"RESULTS_SOURCE": "google_sheet"}), \
