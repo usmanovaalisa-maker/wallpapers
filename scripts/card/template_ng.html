@@ -1,133 +1,87 @@
 <!doctype html>
-<!-- Новогодний шаблон картинки для рассылки «НГ 2026-2027» (1080×1080). Текст подставляет scripts/make_card.py -->
+<!-- Встроенные сцены «Дари Сейчас»: локальный SVG, шрифты и логотип. 1080 × 1080. -->
 <html lang="ru"><head><meta charset="utf-8">
 <link href="fonts.css" rel="stylesheet">
 <style>
-  :root { --night:#1b2a5e; --night2:#2d3f86; --red:#e8414f; --green:#2e9e6a; --gold:#f2c926; --ink:#23264a; }
   * { box-sizing:border-box; margin:0; }
-  body { width:1080px; height:1080px; overflow:hidden; font-family:Nunito, sans-serif; }
+  :root { --scene-top:#315568; --scene-bottom:#173047; --cream:#fff5dc; --gold:#f3ca69; }
+  body { width:1080px; height:1080px; overflow:hidden; font-family:Nunito,sans-serif; }
   .poster { position:relative; width:1080px; height:1080px; overflow:hidden;
-    background: radial-gradient(700px 520px at 50% 0%, #3b56b0 0%, transparent 70%),
-                linear-gradient(180deg, var(--night2) 0%, var(--night) 70%, #16214b 100%);
-    display:flex; flex-direction:column; align-items:center; padding:92px 80px 0; }
-  #snow { position:absolute; inset:0; }
-  .flake { position:absolute; border-radius:50%; background:#fff; }
-  .garland { position:absolute; left:0; top:0; width:1080px; height:90px; }
-  .drift { position:absolute; left:-40px; right:-40px; bottom:-60px; height:215px; background:#fff; border-radius:50% 50% 0 0 / 70% 70% 0 0; }
-  .tree { position:absolute; left:14px; bottom:30px; width:150px; z-index:1; }
-  .gifts { position:absolute; right:20px; bottom:34px; width:190px; z-index:1; }
-  .logo { width:210px; position:relative; background:#fff; border-radius:40px; padding:10px 18px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
-  .badge { position:relative; margin-top:22px; transform:rotate(-2deg); background:var(--red); color:#fff;
-    font-weight:900; font-size:60px; line-height:1; padding:18px 44px 22px; border-radius:30px;
-    box-shadow:0 10px 0 #b02634, 0 22px 40px rgba(0,0,0,.35); white-space:nowrap; }
-  .badge::after { content:""; position:absolute; left:18px; right:18px; top:-10px; height:22px; background:#fff; border-radius:14px; }
-  .date { position:relative; margin-top:28px; font-weight:800; font-size:28px; color:#fff;
-    background:rgba(255,255,255,.14); padding:9px 26px; border-radius:999px; border:2px solid rgba(255,255,255,.35); }
-  .card { position:relative; margin-top:30px; width:100%; height:390px; background:#fffdf7; border-radius:52px;
-    padding:46px 64px; box-shadow:0 26px 60px rgba(0,0,0,.35); border:6px solid var(--gold);
+    background:radial-gradient(ellipse at 50% 35%,#ffffff09,transparent 70%),
+      linear-gradient(160deg,var(--scene-top),var(--scene-bottom)); }
+  .garland { position:absolute; top:0; left:0; width:1080px; height:55px; }
+  .logo { position:absolute; left:64px; top:79px; width:112px; height:112px;
+    background:#fff; padding:8px 11px; border-radius:25px; box-shadow:0 9px 22px #0002; }
+  .badge { position:absolute; left:204px; top:80px; font-size:44px; line-height:1.1;
+    font-weight:900; color:var(--cream); letter-spacing:-.6px; white-space:nowrap; }
+  .accent { position:absolute; top:140px; left:207px; width:67px; height:4px;
+    border-radius:2px; background:#ef6269; }
+  .date { position:absolute; left:204px; top:160px; font-size:24px; line-height:1;
+    font-weight:800; color:#e2edf3; }
+  .sticker { position:absolute; right:62px; top:84px; width:222px; min-height:98px;
+    padding:15px 20px; border:1px solid #fff5dc45; border-radius:23px;
+    background:#fff5dc0d; color:var(--cream); display:none; text-align:center; }
+  .sticker.on { display:block; }
+  .sticker .k { font-size:12px; line-height:1; font-weight:900; letter-spacing:2.5px;
+    text-transform:uppercase; color:var(--gold); margin-bottom:9px; }
+  .sticker .t { font-size:24px; line-height:1.12; font-weight:900; overflow-wrap:break-word; }
+  .scene { position:absolute; left:0; top:224px; width:1080px; height:460px; }
+  .scene svg { display:block; width:100%; height:100%; }
+  .card { position:absolute; left:64px; top:700px; width:952px; height:276px;
+    border-radius:32px; padding:30px 44px; background:#fffaf0;
+    border:2px solid #f3ca69; box-shadow:0 17px 36px #0002;
     display:flex; align-items:center; justify-content:center; }
-  .text { font-weight:900; font-size:60px; line-height:1.18; color:var(--ink); text-align:center; }
-  .occasion-art { display:none; width:108px; height:108px; flex-shrink:0;
-    border-radius:30px; background:#fff0c5; padding:9px; }
-  .occasion-art svg { width:90px; height:90px; }
-  .card.has-occasion { flex-direction:column; gap:16px; padding:26px 48px; }
-  .card.has-occasion .occasion-art { display:block; }
-  .card.has-occasion .text { max-height:210px; }
-  .ball { position:absolute; width:70px; }
-  /* наклейка «повод для радости» — появляется, только если у дня есть occasion_title */
-  .sticker { position:absolute; right:40px; top:76px; width:214px; height:214px; border-radius:50%; z-index:3;
-    background:radial-gradient(circle at 35% 30%, #ffe680 0%, var(--gold) 60%, #e0b015 100%);
-    border:6px dashed #fff; box-shadow:0 14px 34px rgba(0,0,0,.35); transform:rotate(9deg);
-    display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:22px 32px; }
-  .sticker.on { display:flex; }
-  .sticker .k { font-weight:900; font-size:17px; letter-spacing:1px; text-transform:uppercase; color:#b02634; }
-  .sticker svg { width:64px; height:64px; margin:4px 0 2px; flex-shrink:0; }
-  .sticker .t { font-weight:900; font-size:24px; line-height:1.08; color:var(--ink); }
-  .footer { position:relative; margin-top:66px; font-weight:900; font-size:30px; color:var(--night); z-index:2; }
-  .footer b { color:var(--red); }
+  .text { width:100%; font-size:44px; line-height:1.22; font-weight:900;
+    color:#253955; text-align:center; overflow-wrap:break-word; }
+  .footer { position:absolute; top:1012px; left:64px; right:64px; display:flex;
+    align-items:center; justify-content:space-between; color:#e7edf1;
+    font-weight:800; font-size:22px; line-height:1; }
+  .footer b { color:var(--gold); font-weight:900; }
+  .footer .season { letter-spacing:1px; font-size:18px; color:#cadce2; }
 </style></head>
 <body><div class="poster">
-  <div id="snow"></div>
-  <svg class="garland" viewBox="0 0 1080 90" id="garland"></svg>
-  <div class="drift"></div>
-  <svg class="tree" viewBox="0 0 100 130"><polygon points="50,4 80,44 64,44 88,78 68,78 96,114 4,114 32,78 12,78 36,44 20,44" fill="#2e9e6a"/><rect x="43" y="114" width="14" height="14" fill="#8b5a2b"/><polygon points="50,0 53,8 62,8 55,13 58,21 50,16 42,21 45,13 38,8 47,8" fill="#f2c926"/><circle cx="40" cy="40" r="4" fill="#e8414f"/><circle cx="60" cy="62" r="4" fill="#f2c926"/><circle cx="36" cy="72" r="4" fill="#4c9be8"/><circle cx="64" cy="98" r="4" fill="#e8414f"/><circle cx="30" cy="104" r="4" fill="#f2c926"/><circle cx="52" cy="86" r="4" fill="#fff"/></svg>
-  <svg class="gifts" viewBox="0 0 120 80"><rect x="4" y="30" width="50" height="46" rx="5" fill="#e8414f"/><rect x="25" y="30" width="8" height="46" fill="#f2c926"/><rect x="0" y="24" width="58" height="12" rx="4" fill="#ff5d6a"/><path d="M29 24c-4-10-18-12-18-4 0 5 9 6 18 4zM29 24c4-10 18-12 18-4 0 5-9 6-18 4z" fill="#f2c926"/><rect x="62" y="42" width="52" height="34" rx="5" fill="#876db0"/><rect x="84" y="42" width="8" height="34" fill="#fff"/><rect x="58" y="36" width="60" height="11" rx="4" fill="#9d86c4"/><path d="M88 36c-4-9-16-10-16-3 0 4 8 5 16 3zM88 36c4-9 16-10 16-3 0 4-8 5-16 3z" fill="#fff"/></svg>
-
-  <div class="sticker" id="sticker"><div class="k">Сегодня</div><svg viewBox="0 0 48 48" id="sticon"></svg><div class="t" id="sttitle"></div></div>
-  <img class="logo" src="../../logo.svg" alt="">
+  <svg class="garland" viewBox="0 0 1080 55" aria-hidden="true" id="garland"></svg>
+  <img class="logo" src="../../logo.svg" alt="Дари Сейчас">
   <div class="badge">Новогодний сезон</div>
-  <div class="date" id="date">среда, 30 сентября</div>
-  <div class="card">
-    <svg class="ball" style="left:-30px;top:-34px" viewBox="0 0 40 48"><rect x="15" y="0" width="10" height="7" rx="2" fill="#f2c926"/><circle cx="20" cy="27" r="19" fill="#e8414f"/><path d="M5 24c10 5 20 5 30 0" stroke="#fff" stroke-width="2.5" fill="none"/><circle cx="13" cy="20" r="4" fill="#fff" opacity=".5"/></svg>
-    <svg class="ball" style="right:-26px;top:-30px;width:60px" viewBox="0 0 40 48"><rect x="15" y="0" width="10" height="7" rx="2" fill="#f2c926"/><circle cx="20" cy="27" r="19" fill="#2e9e6a"/><path d="M5 24c10 5 20 5 30 0" stroke="#f2c926" stroke-width="2.5" fill="none"/><circle cx="13" cy="20" r="4" fill="#fff" opacity=".5"/></svg>
-    <div class="occasion-art" id="occasion-art" aria-hidden="true"></div>
-    <div class="text" id="text">С наступающим!</div>
-  </div>
-  <div class="footer">НГ 2026–2027 · <b>«Дари Сейчас»</b></div>
+  <div class="accent"></div>
+  <div class="date" id="date"></div>
+  <div class="sticker" id="sticker"><div class="k">Сегодня</div><div class="t" id="sttitle"></div></div>
+  <div class="scene" id="scene"></div>
+  <div class="card"><div class="text" id="text"></div></div>
+  <div class="footer"><span>Маленькие радости · <b>«Дари Сейчас»</b></span><span class="season">НГ 2026–2027</span></div>
 </div>
+<script src="scenes.js"></script>
 <script>
-  // Гирлянда по верхнему краю
   (function () {
-    const g = document.getElementById('garland'), colors = ['#e8414f', '#f2c926', '#4c9be8', '#2e9e6a', '#ff8ad0'];
-    let svg = '<path d="M0 20 Q 67 70 135 20 T 270 20 T 405 20 T 540 20 T 675 20 T 810 20 T 945 20 T 1080 20" stroke="#0f1838" stroke-width="3" fill="none"/>';
-    for (let i = 0; i < 24; i++) {
-      const x = 22 + i * 45, t = (x % 135) / 135, y = 20 + 50 * 4 * t * (1 - t) * 0.5 + 6;
-      svg += `<ellipse cx="${x}" cy="${y + 12}" rx="9" ry="13" fill="${colors[i % colors.length]}"/><circle cx="${x}" cy="${y + 12}" r="18" fill="${colors[i % colors.length]}" opacity=".25"/>`;
+    const colors=['#ef6269','#f3ca69','#76c8ae','#b5a0d6','#8ebcda'];
+    let svg='<path d="M0 1Q135 65 270 1T540 1T810 1T1080 1" stroke="#142c3d" stroke-width="3" fill="none"/>';
+    for(let i=0;i<24;i++) {
+      const x=23+i*45,t=(x%270)/270,y=1+32*4*t*(1-t);
+      svg+='<ellipse cx="'+x+'" cy="'+(y+6)+'" rx="6" ry="9" fill="'+colors[i%5]+'"/>';
     }
-    g.innerHTML = svg;
+    document.getElementById('garland').innerHTML=svg;
   })();
-  // Снег: раскладка зависит от даты
-  function snow(seed) {
-    let s = seed; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-    const box = document.getElementById('snow'); box.innerHTML = '';
-    for (let i = 0; i < 90; i++) {
-      const f = document.createElement('div'); f.className = 'flake';
-      const r = 3 + rnd() * 9;
-      Object.assign(f.style, { left: rnd() * 1080 + 'px', top: 60 + rnd() * 900 + 'px', width: r + 'px', height: r + 'px', opacity: .35 + rnd() * .6 });
-      box.appendChild(f);
-    }
-  }
-  // Значки для наклейки «повод для радости» (occasion_icon)
-  const ICONS = {
-    pancakes: '<ellipse cx="24" cy="36" rx="22" ry="9" fill="#dce6f2"/><ellipse cx="24" cy="34" rx="17" ry="6" fill="#fff"/><rect x="10" y="23" width="28" height="10" rx="5" fill="#c9832f"/><ellipse cx="24" cy="23" rx="14" ry="6" fill="#f5c56e"/><path d="M14 24c3 3 6-1 9 1s5 4 7 0" fill="none" stroke="#d78d35" stroke-width="2"/><circle cx="24" cy="19" r="4" fill="#e8414f"/><circle cx="30" cy="21" r="3" fill="#ba2941"/><path d="M20 5c-3 4 3 5 0 9M28 5c-3 4 3 5 0 9" stroke="#876db0" stroke-width="2" fill="none" stroke-linecap="round"/>',
-    gift: '<rect x="7" y="20" width="34" height="23" rx="3" fill="#e8414f"/><rect x="4" y="14" width="40" height="9" rx="3" fill="#ff5d6a"/><rect x="21" y="14" width="6" height="29" fill="#fff"/><path d="M24 14c-3-8-14-9-14-3 0 4 7 4 14 3zM24 14c3-8 14-9 14-3 0 4-7 4-14 3z" fill="#2e9e6a"/>',
-    heart: '<path d="M24 42S6 31 6 18c0-6 5-10 10-10 4 0 6 2 8 5 2-3 4-5 8-5 5 0 10 4 10 10 0 13-18 24-18 24z" fill="#e8414f"/><circle cx="15" cy="17" r="3" fill="#fff" opacity=".6"/>',
-    smile: '<circle cx="24" cy="24" r="19" fill="#ffb347"/><circle cx="17" cy="19" r="3" fill="#23264a"/><circle cx="31" cy="19" r="3" fill="#23264a"/><path d="M14 27c3 8 17 8 20 0" stroke="#23264a" stroke-width="3.5" fill="none" stroke-linecap="round"/>',
-    snowflake: '<g stroke="#4c9be8" stroke-width="3.5" stroke-linecap="round"><path d="M24 4v40M7 14l34 20M7 34l34-20"/><path d="M24 10l-5-5M24 10l5-5M24 38l-5 5M24 38l5 5"/></g>',
-    candy: '<path d="M6 16l8 8-8 8zM42 16l-8 8 8 8z" fill="#ff8ad0"/><circle cx="24" cy="24" r="11" fill="#e8414f"/><path d="M17 18c5 2 9 8 8 15M24 13c4 4 6 9 5 15" stroke="#fff" stroke-width="2.5" fill="none"/>',
-    family: '<circle cx="15" cy="12" r="6" fill="#876db0"/><rect x="8" y="20" width="14" height="22" rx="7" fill="#876db0"/><circle cx="33" cy="12" r="6" fill="#e8414f"/><rect x="26" y="20" width="14" height="22" rx="7" fill="#e8414f"/><circle cx="24" cy="27" r="4.5" fill="#2e9e6a"/><rect x="19" y="32" width="10" height="12" rx="5" fill="#2e9e6a"/>',
-    tree: '<polygon points="24,3 37,20 30,20 41,33 32,33 43,44 5,44 16,33 7,33 18,20 11,20" fill="#2e9e6a"/><circle cx="20" cy="22" r="2.5" fill="#e8414f"/><circle cx="29" cy="31" r="2.5" fill="#fff"/><circle cx="18" cy="38" r="2.5" fill="#4c9be8"/>',
-    star: '<polygon points="24,4 30,17 44,18 33,28 37,42 24,34 11,42 15,28 4,18 18,17" fill="#e8414f"/>',
-    tea: '<path d="M8 18h26v12a10 10 0 0 1-10 10h-6A10 10 0 0 1 8 30z" fill="#e8414f"/><path d="M34 21h3a5 5 0 0 1 0 10h-3" stroke="#e8414f" stroke-width="3.5" fill="none"/><path d="M16 6c-2 3 2 5 0 8M23 6c-2 3 2 5 0 8" stroke="#876db0" stroke-width="2.5" fill="none" stroke-linecap="round"/>',
-    cake: '<rect x="8" y="22" width="32" height="20" rx="3" fill="#ff8ad0"/><path d="M8 29c4 3 8-3 11 0s8 3 11 0 8-3 10 0" stroke="#fff" stroke-width="3" fill="none"/><rect x="22" y="10" width="4" height="12" fill="#4c9be8"/><path d="M24 3c3 3 3 6 0 7-3-1-3-4 0-7z" fill="#e8414f"/>',
-    toy: '<circle cx="14" cy="12" r="6" fill="#a0673a"/><circle cx="34" cy="12" r="6" fill="#a0673a"/><circle cx="24" cy="21" r="12" fill="#c58448"/><ellipse cx="24" cy="25" rx="5" ry="4" fill="#f0d0a8"/><circle cx="19" cy="18" r="2" fill="#23264a"/><circle cx="29" cy="18" r="2" fill="#23264a"/><ellipse cx="24" cy="39" rx="12" ry="8" fill="#c58448"/>'
-  };
-  function sticker(occ) {
-    const box = document.getElementById('sticker');
-    const art = document.getElementById('occasion-art');
-    const card = document.getElementById('text').parentElement;
-    card.classList.toggle('has-occasion', Boolean(occ && occ.title));
-    if (!occ || !occ.title) { box.classList.remove('on'); art.innerHTML = ''; return; }
-    art.innerHTML = '<svg viewBox="0 0 48 48">' + (ICONS[occ.icon] || ICONS.gift) + '</svg>';
-    document.getElementById('sticon').innerHTML = ICONS[occ.icon] || ICONS.gift;
-    const t = document.getElementById('sttitle'); t.textContent = occ.title;
-    box.classList.add('on');
-    let size = 26; t.style.fontSize = size + 'px';
-    while (size > 15 && t.scrollHeight > 78) { size -= 1; t.style.fontSize = size + 'px'; }
-  }
-  // Подставляет текст и уменьшает шрифт, пока текст не поместится в карточку
-  window.fill = (text, date, seed, occ) => {
-    sticker(occ);
-    const el = document.getElementById('text'), card = el.parentElement;
-    document.getElementById('date').textContent = date;
-    el.textContent = text;
-    snow(seed || 7);
-    let size = occ && occ.title ? 44 : 62;
-    el.style.fontSize = size + 'px';
-    const available = occ && occ.title ? card.clientHeight - 184 : card.clientHeight - 92;
-    while (size > 26 && el.scrollHeight > available) { size -= 2; el.style.fontSize = size + 'px'; }
-    if (el.scrollHeight > available) throw new Error('Текст не помещается в карточку');
+  window.fill=(text,date,seed,occasion)=>{
+    if (!window.NGScenes) throw new Error('Не загружены встроенные сцены');
+    const art=NGScenes.build(occasion && occasion.icon,seed);
+    document.documentElement.style.setProperty('--scene-top',art.top);
+    document.documentElement.style.setProperty('--scene-bottom',art.bottom);
+    document.getElementById('scene').innerHTML=art.svg;
+    document.getElementById('scene').dataset.scene=art.id;
+    document.getElementById('scene').dataset.variant=art.variant;
+    const sticker=document.getElementById('sticker'),title=document.getElementById('sttitle');
+    title.textContent=occasion && occasion.title ? occasion.title : '';
+    sticker.classList.toggle('on',Boolean(title.textContent));
+    let titleSize=24; title.style.fontSize=titleSize+'px';
+    while(titleSize>17 && title.scrollHeight>64) { titleSize--; title.style.fontSize=titleSize+'px'; }
+    if(title.textContent && title.scrollHeight>64) throw new Error('Не помещается название повода');
+    document.getElementById('date').textContent=date;
+    const el=document.getElementById('text'),card=el.parentElement;
+    el.textContent=text;
+    let size=44; el.style.fontSize=size+'px';
+    const available=card.clientHeight-60;
+    while(size>26 && el.scrollHeight>available) { size-=2; el.style.fontSize=size+'px'; }
+    if(el.scrollHeight>available) throw new Error('Текст не помещается в карточку');
     return size;
   };
-</script>
-</body></html>
+</script></body></html>

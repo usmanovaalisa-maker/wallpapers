@@ -23,7 +23,11 @@ def date_label(date):
 
 
 def make_card(date, text, template="template.html", prefix="", occasion=None, output=None):
-    """occasion — {"title": "День доброты", "icon": "heart"} для наклейки «Сегодня» (есть в новогоднем шаблоне)."""
+    """occasion — {"title": "День доброты", "icon": "heart"}.
+
+    В новогоднем шаблоне icon выбирает большую встроенную сцену, title — подпись
+    «Сегодня». Детали сцены определяются датой; финансовые данные сюда не передаются.
+    """
     out = pathlib.Path(output) if output else ROOT / "cards" / f"{prefix}{date}.jpg"
     out.parent.mkdir(parents=True, exist_ok=True)
     seed = dt.date.fromisoformat(date).toordinal() % 233280
